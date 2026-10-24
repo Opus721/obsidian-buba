@@ -1,0 +1,209 @@
+/* "All tags" (tag-list.ts): rows use Obsidian's tree classes, like folders in the Buba tree. Our own parts:
+   the icon cell before the name (a Lucide `tags` icon in the group's color for a group, a color circle for a
+   tag, a grey circle for a tag without color), the exclusive-group icon before the count, the count column
+   and, on phones, disabling the WebKit callout and text selection on long press of a row, which opens the
+   group or tag menu as on tiles (src/assets/mobile/mobile.css). Values are Obsidian variables plus fixed
+   layout numbers.
+
+   Row geometry is shared with the folder tree (tree.css): text line height `--buba-tree-line`, icon → name
+   gap `--buba-tree-gap`, text and plus offsets. Tag-specific numbers:
+   - `--buba-tag-dot` is the tag circle (same size as panel tags, tags-rating.css), `--buba-tag-cell` the
+     width of its cell, `--buba-tag-dot-x` / `-y` the circle offsets;
+   - `--buba-tag-group-y` is the vertical offset of the group icon, `--buba-tag-mark-y` of the exclusive-group
+     mark. */
+.buba-tag-tree {
+  --buba-tag-dot: var(--buba-style-tag-dot, 9px);
+  --buba-tag-cell: 14px;
+  --buba-tag-dot-x: 0px;
+  --buba-tag-dot-y: 0px;
+  --buba-tag-group-y: 0px;
+  --buba-tag-mark-y: 0px;
+}
+
+.is-phone .buba-tag-tree {
+  --buba-tag-cell: 18px;
+}
+
+/* Icon cell as for folders: one first name line tall, the icon offset from its top and left edge by half the
+   difference rounded down. Width matches a folder icon ("New tag" and groups); a tag gets its own circle
+   cell. */
+.buba-tag-tree .buba-tag-cell {
+  display: flex;
+  flex: none;
+  align-self: flex-start;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: round(var(--icon-xs), 1px);
+  height: var(--buba-tree-line);
+  margin-inline-end: var(--buba-tree-gap);
+  --icon-size: round(var(--icon-xs), 1px);
+}
+
+.buba-tag-tree .buba-tag-cell:not(.mod-group):not(:has(> svg.lucide-plus)) {
+  width: var(--buba-tag-cell);
+}
+
+.buba-tag-tree .buba-tag-cell > svg {
+  flex: none;
+  margin-top: round(down, calc((var(--buba-tree-line) - var(--icon-size)) / 2), 1px);
+  margin-left: round(down, calc(50% - var(--icon-size) / 2), 1px);
+}
+
+/* Tag circle centered in its cell; the circle's own margin (src/assets/color/dot.css) is not needed here. */
+.buba-tag-tree .buba-tag-cell > .buba-color-dot {
+  width: var(--buba-tag-dot);
+  height: var(--buba-tag-dot);
+  margin: 0;
+  margin-top: round(down, calc((var(--buba-tree-line) - var(--buba-tag-dot)) / 2), 1px);
+  margin-left: round(down, calc(50% - var(--buba-tag-dot) / 2), 1px);
+  translate: var(--buba-tag-dot-x) var(--buba-tag-dot-y);
+}
+
+/* The "New tag" plus shares its offset with the "New folder" plus (tree.css). */
+.buba-tag-tree .buba-tag-cell > svg.lucide-plus {
+  translate: 0 var(--buba-tree-plus-y);
+}
+
+/* A tag without color gets a grey circle (`tagDot`, src/assets/color/dot.ts): a share of the theme text color
+   over the sidebar background, so colorless rows and tags do not fade out. One rule for every place a tag
+   circle appears (tree, panel tags, tag picker), since plugin styles end up in one file. dot.css has no
+   numbers of its own. */
+.buba-color-dot.mod-default {
+  --buba-color: color-mix(
+    in srgb,
+    var(--text-normal) var(--buba-style-tag-no-color, 28%),
+    var(--background-secondary)
+  );
+}
+
+/* Group icon in the group's color (`--buba-color`, set by tag-list.ts after colorCss); without color, the
+   same grey as a colorless tag circle; its own vertical offset. */
+.buba-tag-tree .buba-tag-cell.mod-group {
+  color: var(
+    --buba-color,
+    color-mix(in srgb, var(--text-normal) var(--buba-style-tag-no-color, 28%), var(--background-secondary))
+  );
+}
+
+.buba-tag-tree .buba-tag-cell.mod-group > svg {
+  translate: var(--buba-tag-dot-x) var(--buba-tag-group-y);
+}
+
+/* A group icon whose color is hard to see on the theme background becomes white in light and black in dark
+   themes: the cell gets the same `mod-low-contrast-<theme>` classes as the dot (dot.css; threshold in
+   src/core/color/contrast.ts), and the theme is Obsidian's class on `body`. As for folder icons (tree.css),
+   the outline uses Obsidian's muted color and the fill the group color. The color is `--text-faint`, not the
+   dot ring's `--background-modifier-border`: measured in Chromium with Obsidian 1.13.7 styles, the border
+   against the panel background is 1.18:1 in light and 1.17:1 in dark (nearly invisible), versus 2.12:1 and
+   2.57:1. The Lucide icon is a single `svg`, without an `addIcon` wrapper. */
+.theme-light .buba-tag-tree .buba-tag-cell.mod-group.mod-low-contrast-light svg,
+.theme-dark .buba-tag-tree .buba-tag-cell.mod-group.mod-low-contrast-dark svg {
+  color: var(--text-faint);
+  fill: var(--buba-color, transparent);
+}
+
+/* The name takes the free space, so the exclusive mark and the count sit at the right edge. Name and count
+   have their own vertical offset, separate from folders; "New tag" shares the one of "New folder"
+   (tree.css). */
+.buba-tag-tree .tree-item-inner {
+  flex-grow: 1;
+}
+
+.buba-tree .buba-tag-tree .tree-item-inner,
+.buba-tree .buba-tag-tree .tree-item-flair-outer {
+  translate: 0 var(--buba-tag-text-y);
+}
+
+.buba-tree .buba-tag-tree .buba-tag-new .tree-item-inner {
+  translate: 0 var(--buba-tree-new-text-y);
+}
+
+/* Exclusive-group mark in its own row-height cell, like the icon cell, before the count column; the gap to
+   the count is Obsidian's count block padding (.tree-item-flair-outer). */
+.buba-tag-tree .buba-tag-group-mark {
+  display: flex;
+  flex: none;
+  align-self: flex-start;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: round(var(--icon-xs), 1px);
+  height: var(--buba-tree-line);
+  color: var(--icon-color);
+  --icon-size: round(var(--icon-xs), 1px);
+}
+
+.buba-tag-tree .buba-tag-group-mark > svg {
+  flex: none;
+  margin-top: round(down, calc((var(--buba-tree-line) - var(--icon-size)) / 2), 1px);
+  margin-left: round(down, calc(50% - var(--icon-size) / 2), 1px);
+  translate: 0 var(--buba-tag-mark-y);
+}
+
+/* Count as a column of three equal-width digits, right-aligned, so the exclusive mark to its left does not
+   shift up to 999 files. Width in `ch` rounded to whole pixels plus `tabular-nums`, as Obsidian sizes digit
+   widths itself (app.css 1.13.7). */
+.buba-tag-tree .tree-item-flair {
+  min-width: round(up, 3ch, 1px);
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.is-mobile .buba-tag-tree .tree-item-self {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* "New tag" row at the bottom of the list, in muted text like Obsidian's empty hints; on hover it takes
+   Obsidian's tree row color. The plus sits in the same icon cell and the name lines up with the tags. */
+.buba-tag-tree .buba-tag-new .tree-item-self:not(:hover) {
+  color: var(--text-muted);
+}
+
+/* "Tree" settings (Settings → Buba) for "All tags" use the same `body` classes as folders (tree.css): tag and
+   group color are on the `.tree-item` row (`mod-tag-color`, `--buba-color`, contrast classes; tag-list.ts).
+   Colored guide lines take the group color with the same opacity (fallback 40% =
+   DEFAULT_SETTINGS.treeLinesOpacity); grey lines and colorless rows follow tree.css. The group arrow takes
+   the group color; a tag name takes the dot color and a group name the icon color, on the open row too; the
+   count keeps the theme color. A hard-to-see color falls back to the default look, and its line to
+   `--text-faint`. */
+body.buba-tree-lines-color .buba-tag-tree .tree-item.mod-tag-color {
+  --buba-tree-guide-color: color-mix(
+    in srgb,
+    var(--buba-color) var(--buba-tree-guide-alpha, 40%),
+    transparent
+  );
+}
+
+body.theme-light.buba-tree-lines-color .buba-tag-tree .tree-item.mod-tag-color.mod-low-contrast-light,
+body.theme-dark.buba-tree-lines-color .buba-tag-tree .tree-item.mod-tag-color.mod-low-contrast-dark {
+  --buba-tree-guide-color: var(--text-faint);
+}
+
+body.theme-light.buba-tree-arrow-color
+  .buba-tag-tree
+  .tree-item.mod-tag-color:not(.mod-low-contrast-light)
+  > .tree-item-self
+  > .collapse-icon
+  > svg,
+body.theme-dark.buba-tree-arrow-color
+  .buba-tag-tree
+  .tree-item.mod-tag-color:not(.mod-low-contrast-dark)
+  > .tree-item-self
+  > .collapse-icon
+  > svg {
+  color: var(--buba-color);
+}
+
+body.theme-light.buba-tree-name-tag
+  .buba-tag-tree
+  .tree-item.mod-tag-color:not(.mod-low-contrast-light)
+  > .tree-item-self
+  > .tree-item-inner,
+body.theme-dark.buba-tree-name-tag
+  .buba-tag-tree
+  .tree-item.mod-tag-color:not(.mod-low-contrast-dark)
+  > .tree-item-self
+  > .tree-item-inner {
+  color: var(--buba-color);
+}

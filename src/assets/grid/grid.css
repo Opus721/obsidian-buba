@@ -1,0 +1,28 @@
+/* Grid view: toolbar on top, only the body below it scrolls. The view is a two-row grid rather than a flex
+   column, so the body has its own cell and the drop overlay below lands exactly on it. */
+.buba-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.buba-grid-scroller {
+  overflow-y: auto;
+}
+
+/* While files from the system file manager are dragged over the body (import-drop.ts sets
+   `is-being-dragged-over`), its visible part is covered with Obsidian's accent color at 10 %, like the Bases
+   view and folder rows in the tree. The overlay sits on the view in the body's cell, not inside the body: the
+   body scrolls and would carry the overlay away with the tiles. The toolbar stays uncovered. The overlay
+   ignores the pointer, so drop, click and wheel reach the body. */
+.buba-grid:has(> .buba-grid-scroller.is-being-dragged-over)::after {
+  content: '';
+  position: absolute;
+  grid-area: 2 / 1 / 3 / 2;
+  inset: 0;
+  z-index: var(--layer-cover);
+  pointer-events: none;
+  background: color-mix(in oklch, var(--interactive-accent) 10%, transparent);
+}

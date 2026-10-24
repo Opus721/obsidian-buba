@@ -1,0 +1,455 @@
+/* Buba section of the Style Settings plugin. Style Settings reads the `@settings` comment below from
+   the loaded styles; the `/*!` form survives the production build (esbuild keeps legal comments, moved to the
+   end of styles.css; a plain `/*` one is dropped). Buba does not depend on the plugin: without it, or with a
+   value left as is, nothing is written and every rule falls back to Buba's own numbers.
+
+   How values arrive: Style Settings writes changed values only, as `--<id>` on `body.css-settings-manager`.
+   Buba's numbers are declared on its own blocks (`.buba-tree`, `.buba-inspector`, …), which would shadow a
+   value on `body`, so each such declaration reads its knob with Buba's own number as the fallback:
+   `--buba-tree-row-pad: var(--buba-style-tree-row-pad, 3px)`. Style Settings has one value per vault, not per
+   device; where Buba's phone number differs, the phone rule (`.is-phone`) reads its own `-phone` knob.
+   Defaults below must equal those fallbacks (a test checks it). Toggles set a class named after
+   their id on `body`; their rules are in this file.
+
+   Not here, on Buba's own settings page: guide lines, arrows and names in the folder color, the "Buba" label
+   toggle. Whole pixels only: every px slider steps by 1. */
+
+/*! @settings
+
+name: Buba
+id: buba
+settings:
+  -
+    id: buba-style-info
+    title: Defaults are the author's choice. Where the phone has its own numbers, there are separate phone sliders.
+    title.ru: Значения по умолчанию — выбор автора. Где у телефона свои числа, у него свои ползунки.
+    type: info-text
+  -
+    id: buba-style-tree-heading
+    title: Folder and tag trees
+    title.ru: Деревья папок и меток
+    type: heading
+    level: 2
+    collapsed: true
+  -
+    id: buba-style-tree-row-pad
+    title: Row padding
+    title.ru: Поле строки сверху и снизу
+    description: Tree density, computer
+    description.ru: Плотность дерева, компьютер
+    type: variable-number-slider
+    default: 3
+    min: 0
+    max: 8
+    step: 1
+    format: px
+  -
+    id: buba-style-tree-row-pad-phone
+    title: Row padding — phone
+    title.ru: Поле строки сверху и снизу — телефон
+    type: variable-number-slider
+    default: 6
+    min: 2
+    max: 12
+    step: 1
+    format: px
+  -
+    id: buba-style-tree-indent
+    title: Nesting step
+    title.ru: Шаг вложенности
+    description: Computer
+    description.ru: Компьютер
+    type: variable-number-slider
+    default: 16
+    min: 8
+    max: 32
+    step: 1
+    format: px
+  -
+    id: buba-style-tree-indent-phone
+    title: Nesting step — phone
+    title.ru: Шаг вложенности — телефон
+    type: variable-number-slider
+    default: 20
+    min: 8
+    max: 40
+    step: 1
+    format: px
+  -
+    id: buba-style-tree-icon-shift
+    title: Arrow to icon
+    title.ru: Стрелка → значок
+    description: Computer
+    description.ru: Компьютер
+    type: variable-number-slider
+    default: 2
+    min: 0
+    max: 8
+    step: 1
+    format: px
+  -
+    id: buba-style-tree-icon-shift-phone
+    title: Arrow to icon — phone
+    title.ru: Стрелка → значок — телефон
+    type: variable-number-slider
+    default: 4
+    min: 0
+    max: 10
+    step: 1
+    format: px
+  -
+    id: buba-style-tree-gap
+    title: Icon to name
+    title.ru: Значок → имя
+    type: variable-number-slider
+    default: 8
+    min: 2
+    max: 16
+    step: 1
+    format: px
+  -
+    id: buba-style-tree-active
+    title: Open folder and tag background
+    title.ru: Фон открытой папки и метки
+    description: How much stronger than hover
+    description.ru: Насколько заметнее наведения
+    type: variable-number-slider
+    default: 7
+    min: 0
+    max: 20
+    step: 1
+    format: '%'
+  -
+    id: buba-style-tags-heading
+    title: Tags
+    title.ru: Метки
+    type: heading
+    level: 2
+    collapsed: true
+  -
+    id: buba-style-tag-dot
+    title: Tag circle
+    title.ru: Кружок метки
+    description: In the tag tree and in the file panel
+    description.ru: В дереве меток и в панели файла
+    type: variable-number-slider
+    default: 9
+    min: 6
+    max: 14
+    step: 1
+    format: px
+  -
+    id: buba-style-tag-no-color
+    title: Circle of a tag without color
+    title.ru: Кружок метки без цвета
+    description: Grey brightness
+    description.ru: Яркость серого
+    type: variable-number-slider
+    default: 28
+    min: 10
+    max: 60
+    step: 1
+    format: '%'
+  -
+    id: buba-style-chip-pad-y
+    title: Panel tag — padding top and bottom
+    title.ru: Метка в панели — поле сверху и снизу
+    description: Computer
+    description.ru: Компьютер
+    type: variable-number-slider
+    default: 10
+    min: 6
+    max: 16
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-pad-y-phone
+    title: Panel tag — padding top and bottom — phone
+    title.ru: Метка в панели — поле сверху и снизу — телефон
+    type: variable-number-slider
+    default: 11
+    min: 6
+    max: 18
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-l
+    title: Panel tag — left padding
+    title.ru: Метка в панели — поле слева
+    description: Computer
+    description.ru: Компьютер
+    type: variable-number-slider
+    default: 10
+    min: 4
+    max: 20
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-l-phone
+    title: Panel tag — left padding — phone
+    title.ru: Метка в панели — поле слева — телефон
+    type: variable-number-slider
+    default: 11
+    min: 4
+    max: 20
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-r
+    title: Panel tag — right padding
+    title.ru: Метка в панели — поле справа
+    description: Computer
+    description.ru: Компьютер
+    type: variable-number-slider
+    default: 10
+    min: 4
+    max: 24
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-r-phone
+    title: Panel tag — right padding — phone
+    title.ru: Метка в панели — поле справа — телефон
+    type: variable-number-slider
+    default: 14
+    min: 4
+    max: 24
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-fs
+    title: Panel tag — text
+    title.ru: Метка в панели — текст
+    description: Computer
+    description.ru: Компьютер
+    type: variable-number-slider
+    default: 13
+    min: 11
+    max: 18
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-fs-phone
+    title: Panel tag — text — phone
+    title.ru: Метка в панели — текст — телефон
+    type: variable-number-slider
+    default: 15
+    min: 12
+    max: 20
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-dot-gap
+    title: Panel tag — circle to name
+    title.ru: Метка в панели — кружок → имя
+    type: variable-number-slider
+    default: 9
+    min: 4
+    max: 16
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-x-gap
+    title: Panel tag — name to cross
+    title.ru: Метка в панели — имя → крестик
+    type: variable-number-slider
+    default: 20
+    min: 8
+    max: 32
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-x
+    title: Panel tag — cross
+    title.ru: Метка в панели — крестик
+    description: Computer
+    description.ru: Компьютер
+    type: variable-number-slider
+    default: 13
+    min: 10
+    max: 20
+    step: 1
+    format: px
+  -
+    id: buba-style-chip-x-phone
+    title: Panel tag — cross — phone
+    title.ru: Метка в панели — крестик — телефон
+    type: variable-number-slider
+    default: 18
+    min: 12
+    max: 24
+    step: 1
+    format: px
+  -
+    id: buba-style-add-icon
+    title: Round "+" — plus
+    title.ru: Круглая «+» — плюс
+    description: Computer
+    description.ru: Компьютер
+    type: variable-number-slider
+    default: 13
+    min: 10
+    max: 20
+    step: 1
+    format: px
+  -
+    id: buba-style-add-icon-phone
+    title: Round "+" — plus — phone
+    title.ru: Круглая «+» — плюс — телефон
+    type: variable-number-slider
+    default: 18
+    min: 12
+    max: 24
+    step: 1
+    format: px
+  -
+    id: buba-style-add-bg
+    title: Round buttons — grey background
+    title.ru: Круглые кнопки — серый фон
+    description: Round "+", "Send", phone viewer buttons
+    description.ru: Круглая «+», «Отправить», кнопки просмотра на телефоне
+    type: variable-number-slider
+    default: 6
+    min: 0
+    max: 20
+    step: 1
+    format: '%'
+  -
+    id: buba-style-tiles-heading
+    title: Tiles
+    title.ru: Плитки
+    type: heading
+    level: 2
+    collapsed: true
+  -
+    id: buba-style-plate-icon
+    title: File without preview — icon size
+    title.ru: Файл без превью — размер значка
+    description: Share of the tile's smaller side
+    description.ru: Доля меньшей стороны плитки
+    type: variable-number-slider
+    default: 20
+    min: 10
+    max: 40
+    step: 1
+  -
+    id: buba-style-plate-fill
+    title: File without preview — family color as background
+    title.ru: Файл без превью — цвет семейства фоном
+    description: Off — the color is on the icon and label
+    description.ru: Выключено — цвет на значке и подписи
+    type: class-toggle
+    default: false
+  -
+    id: buba-style-plate-fill-strength
+    title: File without preview — background saturation
+    title.ru: Файл без превью — насыщенность фона
+    type: variable-number-slider
+    default: 20
+    min: 5
+    max: 60
+    step: 1
+    format: '%'
+  -
+    id: buba-style-comment-own-bg
+    title: Comment icon — own background color
+    title.ru: Значок комментария — свой цвет фона
+    description: Off — Obsidian's accent color
+    description.ru: Выключено — цвет акцента Obsidian
+    type: class-toggle
+    default: false
+  -
+    id: buba-style-comment-bg
+    title: Comment icon — background color
+    title.ru: Значок комментария — цвет фона
+    type: variable-color
+    format: hex
+    default: '#4ea7fc'
+  -
+    id: buba-style-comment-text
+    title: Comment icon — icon in text color
+    title.ru: Значок комментария — значок цветом текста
+    description: Off — the color for text on the accent
+    description.ru: Выключено — цвет текста на акценте
+    type: class-toggle
+    default: false
+  -
+    id: buba-style-comment-alpha
+    title: Comment icon — background opacity
+    title.ru: Значок комментария — непрозрачность фона
+    type: variable-number-slider
+    default: 100
+    min: 20
+    max: 100
+    step: 5
+    format: '%'
+  -
+    id: buba-style-menu-heading
+    title: '"Buba" label in menus'
+    title.ru: Подпись «Buba» в меню
+    type: heading
+    level: 2
+    collapsed: true
+  -
+    id: buba-style-menu-own-near
+    title: Right after the item text
+    title.ru: Сразу после текста пункта
+    description: Off — at the right edge
+    description.ru: Выключено — у правого края
+    type: class-toggle
+    default: false
+  -
+    id: buba-style-menu-own-accent
+    title: In the accent color
+    title.ru: Цветом акцента
+    description: Off — quieter than the item text
+    description.ru: Выключено — тише текста пункта
+    type: class-toggle
+    default: false
+
+*/
+
+/* File without preview, "family color as background": the tile picture takes the family color at the chosen
+   share over Obsidian's tile background; icon and label switch to the text color, as on any colored surface.
+   A file without a family color keeps the neutral `--text-muted` mix, so it stays grey. */
+body.buba-style-plate-fill .buba-tile-thumb.mod-format {
+  background-color: color-mix(
+    in oklch,
+    var(--buba-format-color) var(--buba-style-plate-fill-strength, 20%),
+    var(--background-secondary)
+  );
+  color: var(--text-normal);
+}
+
+/* Comment icon on a tile, only while a comment is open (the neutral "all done" look stays): own background
+   color, icon in the text color, background opacity. The base rule is in src/assets/grid/tiles.css. */
+body .buba-tile.has-open-comment .buba-tile-comment {
+  background-color: color-mix(
+    in srgb,
+    var(--interactive-accent) var(--buba-style-comment-alpha, 100%),
+    transparent
+  );
+}
+
+body.buba-style-comment-own-bg .buba-tile.has-open-comment .buba-tile-comment {
+  background-color: color-mix(
+    in srgb,
+    var(--buba-style-comment-bg, #4ea7fc) var(--buba-style-comment-alpha, 100%),
+    transparent
+  );
+}
+
+body.buba-style-comment-text .buba-tile.has-open-comment .buba-tile-comment {
+  color: var(--text-normal);
+}
+
+/* "Buba" label in menus: right after the item text instead of the right edge, and the accent color instead of
+   the quiet one. Base rule: src/platform/menu-title.css. */
+body.buba-style-menu-own-near .buba-menu-own {
+  margin-inline-start: 0;
+  padding-inline-start: var(--size-4-2);
+}
+
+body.buba-style-menu-own-accent .buba-menu-own {
+  color: var(--text-accent);
+}

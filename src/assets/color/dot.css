@@ -1,0 +1,21 @@
+/* Color dot (dot.ts): the color is `--buba-color` in `style`, set after the pattern check (colorCss). The dot
+   has no ring: only a color that is hard to see on the theme background gets Obsidian's thin
+   `--background-modifier-border`. The code sets `mod-low-contrast-<theme>` by contrast with the background
+   (src/core/color/contrast.ts); the theme is Obsidian's class on `body`. Same in the tree, the tags window
+   and the panel chips, on desktop and phone. */
+.buba-color-dot {
+  --buba-color: transparent;
+  display: inline-block;
+  flex: none;
+  width: var(--size-4-2);
+  height: var(--size-4-2);
+  margin-inline-end: var(--size-4-1);
+  border-radius: var(--radius-l);
+  background-color: var(--buba-color);
+  vertical-align: middle;
+}
+
+.theme-light .buba-color-dot.mod-low-contrast-light,
+.theme-dark .buba-color-dot.mod-low-contrast-dark {
+  box-shadow: inset 0 0 0 var(--border-width) var(--background-modifier-border);
+}

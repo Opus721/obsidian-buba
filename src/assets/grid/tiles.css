@@ -1,0 +1,319 @@
+/* Grid tiles are absolutely positioned in the body; place and size come from the layout (tiles.ts). The
+   scrollbar always keeps its space, so the layout width does not jump when it appears; browser scroll
+   anchoring (overflow-anchor) is off because the visible-range renderer drives scrolling. A tile does not
+   clip marks other modules draw past its edge: `contain` has no `paint`. Stacking inside the tile picture:
+   icon, format label, preview, original on hover, format badge on top. */
+.buba-tiles {
+  scrollbar-gutter: stable;
+  overflow-anchor: none;
+}
+
+.buba-grid-sizer {
+  position: relative;
+  width: 100%;
+}
+
+/* Phone: room for Obsidian's bottom bar when it lies over the view, using its variable, as the Bases view
+   does. */
+.is-phone .buba-grid-sizer {
+  margin-bottom: var(--view-bottom-spacing);
+}
+
+.buba-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  contain: size layout style;
+}
+
+.buba-tile-thumb {
+  position: relative;
+  flex: auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-s);
+  background-color: var(--background-secondary);
+  color: var(--text-faint);
+  --icon-size: var(--icon-xl);
+  --icon-stroke: var(--icon-xl-stroke-width);
+}
+
+.buba-tile.is-folder .buba-tile-thumb {
+  color: var(--text-muted);
+}
+
+.buba-tile-icon {
+  display: flex;
+}
+
+/* A file without a picture (canvas, base, note, PSD and AI without a thumbnail, AEP, ZIP…; tiles.ts →
+   `stubOf`): one group in the center of the tile picture, an Obsidian icon for the type above the format
+   label (`.buba-tile-plate`), stacked; such a tile has no corner badge, only the label. The family color is
+   `--buba-format-color`: Obsidian's text color by default, for a colored family a preset or a custom
+   `#rrggbb` from the table (src/core/format/family.ts) in `style`. Text and icon use, in the dark theme, the
+   color mixed with the text color; in the light theme, its own hue with lightness at most 0.52 (below). The
+   label has no border or background of its own: the tile picture is grey already; the text contrast target
+   against it is 4.5:1. The icon is a share of the tile picture (container query, as in Obsidian's app.css):
+   32 px at 160 px, 80 at 400 px. The label uses Obsidian's UI font from `--font-ui-smaller` to
+   `--font-ui-medium` (14.4 px at 160 px, 15 px from 167 px), at most 1/6 of the tile width: six characters
+   (PRPROJ) fit from 80 px; narrower, a floor of 0.8 of the UI font and an ellipsis. The label line is 1 em:
+   no empty line space under the capitals, so the group is centered both by its box and by the visible letters
+   (Obsidian 1.13: 0.5 px versus 1.5 px off with `--line-height-tight`). On a short tile the icon goes and the
+   label stays (`mod-format` only exists with its text). Same rules on desktop and phone. Everything sits on
+   whole pixels: the icon (`--buba-tt-icon`, 20 % of the smaller side, at least `--icon-s`) and label font
+   (`--buba-tt-font`) are rounded, and the "icon, gap, label" group sits whole pixels from the top and left,
+   centered. */
+.buba-tile-thumb.mod-format {
+  --buba-format-color: var(--text-muted);
+  --buba-tt-icon: max(var(--icon-s), round(calc(1cqmin * var(--buba-style-plate-icon, 20)), 1px));
+  --buba-tt-font: round(
+    max(
+      calc(var(--font-ui-smaller) * 0.8),
+      min(
+        var(--font-ui-medium),
+        max(var(--font-ui-smaller), 9cqmin),
+        calc((100cqi - 2 * var(--size-4-2)) / 6)
+      )
+    ),
+    1px
+  );
+  --icon-size: var(--buba-tt-icon);
+  container-type: size;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  color: color-mix(in oklch, var(--buba-format-color) 80%, var(--text-normal));
+}
+
+.buba-tile-thumb.mod-format .buba-tile-icon {
+  margin-top: round(
+    down,
+    calc((100cqh - var(--buba-tt-icon) - var(--size-4-2) - var(--buba-tt-font)) / 2),
+    1px
+  );
+  margin-left: round(down, calc((100cqw - var(--buba-tt-icon)) / 2), 1px);
+}
+
+/* Light theme: label text and icon keep the family color's hue and chroma with OKLCH lightness at most 0.52;
+   only light colors darken, and each keeps 4.5:1 against the tile picture background
+   (`--background-secondary`, #f6f6f6). 0.52 is the largest value at which all table colors and all eight
+   Obsidian presets keep 4.5:1 (Obsidian 1.14: Pro Tools 4.72, preset green 4.51; at 0.53 green drops to
+   4.34). Neutral colors use `--text-muted` as is. The first rule is the fallback for engines without relative
+   color (Safari before 18): half the text color (ZIP 4.9:1). The dark theme is as above. */
+.theme-light .buba-tile-thumb.mod-format {
+  color: color-mix(in oklch, var(--buba-format-color) 50%, var(--text-normal));
+}
+
+@supports (color: oklch(from black min(l, 0.52) c h)) {
+  .theme-light .buba-tile-thumb.mod-format {
+    color: oklch(from var(--buba-format-color) min(l, 0.52) c h);
+  }
+}
+
+.buba-tile-plate {
+  display: none;
+}
+
+.buba-tile-thumb.mod-format .buba-tile-plate:not(:empty) {
+  display: block;
+  width: calc(100cqw - 2 * var(--size-4-2));
+  margin-top: var(--size-4-2);
+  margin-left: var(--size-4-2);
+  overflow: hidden;
+  font-size: var(--buba-tt-font);
+  font-weight: var(--font-semibold);
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One label only: a file without a picture has no corner badge until a preview arrives (PSD and AI with a
+   thumbnail are pictures and have the badge). */
+.buba-tile:not(.has-preview) .buba-tile-thumb.mod-format .buba-tile-badge {
+  display: none;
+}
+
+@container (height < 6rem) {
+  .buba-tile-thumb.mod-format .buba-tile-icon {
+    display: none;
+  }
+
+  .buba-tile-thumb.mod-format .buba-tile-plate:not(:empty) {
+    margin-top: round(down, calc((100cqh - var(--buba-tt-font)) / 2), 1px);
+  }
+}
+
+/* The preview covers the whole tile; until it arrives the icon shows. The image ignores the pointer and is
+   not draggable itself: a tile with a preview behaves like a placeholder tile. */
+.buba-tile-image,
+.buba-tile-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.buba-tile-image {
+  display: none;
+}
+
+.buba-tile.has-preview .buba-tile-image {
+  display: block;
+}
+
+/* The label needs higher specificity than the rule that shows it (`.mod-format … :not(:empty)`): the preview
+   covers it too. */
+.buba-tile.has-preview .buba-tile-icon,
+.buba-tile.has-preview .buba-tile-thumb.mod-format .buba-tile-plate {
+  display: none;
+}
+
+/* "Crop to tile" in the uniform grid: preview and hover original fill the tile. */
+.is-cover .buba-tile-image,
+.is-cover .buba-tile-media {
+  object-fit: cover;
+}
+
+/* "Columns": the tile already has the picture's proportions. An image taller than the tile height limit, or a
+   tile held at an old proportion, shows its top part without bars, like a long screenshot opened from the
+   start. */
+.is-waterfall .buba-tile-image,
+.is-waterfall .buba-tile-media {
+  object-fit: cover;
+  object-position: top;
+}
+
+/* Corner badges of the picture: comment and format as one group from the top and right edges. Sizes are this
+   rule's variables (phone below): the side of the comment square is also the format badge height, and its
+   icon sits in the square. The format badge has 6 px side padding and a line exactly the badge height, so
+   letters are centered; font and width are rounded to whole pixels and the text is centered in its line, so
+   the rounding extra (up to 1 px) is split evenly instead of all going right. Shown whole or not at all:
+   tiles.ts measures the group with a probe (`#measureBadges`, src/core/layout/badge.ts). */
+.buba-tile-badges {
+  --buba-cmt-size: 22px;
+  --buba-cmt-icon: var(--icon-xs);
+  width: max-content;
+  position: absolute;
+  top: var(--size-4-1);
+  right: var(--size-4-1);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-4-1);
+  pointer-events: none;
+}
+
+.is-phone .buba-tile-badges {
+  --buba-cmt-size: 23px;
+  --buba-cmt-icon: 14px;
+}
+
+.buba-tile-badge {
+  width: calc-size(max-content, round(up, size, 1px));
+  height: var(--buba-cmt-size);
+  padding: 0 var(--size-2-3);
+  border-radius: var(--radius-s);
+  background-color: var(--background-primary);
+  color: var(--text-muted);
+  font-size: round(var(--font-smallest), 1px);
+  font-weight: var(--font-semibold);
+  line-height: var(--buba-cmt-size);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.buba-tile-badge:empty {
+  display: none;
+}
+
+/* The comment square sits left of the format in the shared measured group, so the extension width does not
+   set its position. The `sticky-note` icon is on the accent background in Obsidian's text-on-accent color
+   (light on a dark accent, dark on a light one); the icon sits whole pixels from the square edge. */
+.buba-tile-comment {
+  order: -1;
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: var(--buba-cmt-size);
+  height: var(--buba-cmt-size);
+  border-radius: var(--radius-s);
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  --icon-size: var(--buba-cmt-icon);
+  --icon-stroke: var(--icon-xs-stroke-width);
+  pointer-events: none;
+}
+
+.buba-tile-comment > svg {
+  flex: none;
+  margin-top: round(down, calc((var(--buba-cmt-size) - var(--icon-size)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-cmt-size) - var(--icon-size)) / 2), 1px);
+}
+
+/* All comments done: the icon turns neutral, with the format badge background and color; the accent stays
+   while at least one comment is open (`has-open-comment`, src/core/tags/comment-marks.ts). */
+.buba-tile:not(.has-open-comment) .buba-tile-comment {
+  background-color: var(--background-primary);
+  color: var(--text-muted);
+}
+
+.buba-tile:not(.has-comment) .buba-tile-comment {
+  display: none;
+}
+
+.buba-tile-name {
+  flex: none;
+  padding-top: var(--size-4-1);
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.is-names-hidden .buba-tile-name {
+  display: none;
+}
+
+.buba-tile-probe {
+  position: absolute;
+  visibility: hidden;
+}
+
+/* First lines of MD and TXT (tiles.ts): text over the tile picture in the theme font and color, small size,
+   padded like the format label; lines are clipped by the tile edge and fade out at the bottom. The empty
+   `<img>` of a text tile is hidden: it has no preview image. */
+.buba-tile-text {
+  display: none;
+}
+
+.buba-tile.has-text .buba-tile-text {
+  display: block;
+  position: absolute;
+  inset: 0;
+  padding: var(--size-4-2);
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-text);
+  font-size: var(--font-ui-smaller);
+  line-height: var(--line-height-tight);
+  text-align: start;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, black 70%, transparent);
+}
+
+.buba-tile.has-text .buba-tile-image {
+  display: none;
+}

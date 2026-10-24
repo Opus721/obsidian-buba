@@ -1,0 +1,17 @@
+/* "Link" section of the file panel: the field fills the row, an "Open link" icon button sits on the right.
+   Heading and notes use the shared panel section classes (`buba-storage-heading`, `buba-storage-note`,
+   tags-rating.css). */
+.buba-link {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+}
+
+.buba-link input {
+  flex: auto;
+  min-width: 0;
+}
+
+.buba-link .clickable-icon {
+  flex: none;
+}

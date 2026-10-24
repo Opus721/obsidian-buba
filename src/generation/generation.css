@@ -1,0 +1,328 @@
+/* Generation sections of the file panel ("Generation", "Used in generations"), the prompt window. Only
+   Obsidian variables; label-value rows reuse the panel's `.buba-inspector-rows`. Reference tags in a prompt
+   take the media color of Obsidian's theme presets: image blue, video orange, sound purple. Buttons of the
+   sections are prefixed with the panel and section classes (0,3,0): Obsidian paints every `<button>` with
+   `button:not(.clickable-icon)` (0,1,1), on tablets and phones up to (0,2,1); the keyboard focus ring stays
+   Obsidian's. */
+
+.buba-gen-head {
+  display: flex;
+  align-items: center;
+  margin: calc(-1 * var(--size-4-1)) 0 var(--size-4-1) calc(-1 * var(--size-4-1));
+}
+
+.buba-gen-head-tools {
+  display: flex;
+  flex: none;
+  margin-left: auto;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-fold {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  height: auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--size-4-1);
+  border: 0;
+  background: none;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  cursor: var(--cursor);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-fold:not(:focus-visible) {
+  box-shadow: none;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-fold:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* A long model name in the folded heading is cut, not the title, and the heading buttons stay in the panel. */
+.buba-inspector .buba-inspector-section .buba-gen-fold-icon,
+.buba-inspector .buba-inspector-section .buba-gen-fold-title {
+  flex: none;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-fold-icon {
+  display: flex;
+  --icon-size: var(--icon-xs);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-fold-aside {
+  color: var(--text-faint);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.buba-gen-label {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-1);
+  min-height: var(--buba-icon-button-medium-box, 24px);
+  margin: var(--size-4-2) 0 var(--size-4-1);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.buba-gen-label-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The prompt: line breaks kept, text selectable, clamped to six lines until "Show all". */
+.buba-gen-text {
+  padding: var(--size-4-2) var(--size-4-3);
+  border: var(--border-width) solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary-alt);
+}
+
+.buba-gen-text-body {
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.buba-gen-text-body.is-clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  overflow: hidden;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-more {
+  display: block;
+  height: auto;
+  margin: var(--size-4-1) auto 0;
+  padding: var(--size-2-2) var(--size-4-2);
+  border: 0;
+  background: none;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  cursor: var(--cursor);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-more:not(:focus-visible) {
+  box-shadow: none;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-more:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* A reference tag inside the prompt: a 13 px thumbnail and the tag as written. */
+.buba-inspector .buba-inspector-section .buba-gen-mention {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: auto;
+  margin: 0 1px;
+  padding: 0 var(--size-2-2) 0 var(--size-2-1);
+  vertical-align: baseline;
+  border: var(--border-width) solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-hover);
+  font: inherit;
+  line-height: inherit;
+  white-space: nowrap;
+  cursor: var(--cursor);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-mention:not(:focus-visible) {
+  box-shadow: none;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-mention:hover {
+  border-color: var(--background-modifier-border-hover);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-mention.mod-image {
+  color: var(--color-blue);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-mention.mod-video {
+  color: var(--color-orange);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-mention.mod-audio {
+  color: var(--color-purple);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-mention.is-missing {
+  color: var(--text-faint);
+  border-style: dashed;
+  background: none;
+  cursor: default;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-mention-mini {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  overflow: hidden;
+  border-radius: 2px;
+  --icon-size: 9px;
+  --icon-stroke: 2.5px;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-mention-mini .buba-gen-picture,
+.buba-inspector .buba-inspector-section .buba-gen-thumb .buba-gen-picture {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-mention-mini img,
+.buba-inspector .buba-inspector-section .buba-gen-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* References and results: squares about 48 px, as many per row as fit the panel. */
+.buba-gen-thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: var(--size-4-1);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  overflow: hidden;
+  border: var(--border-width) solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  cursor: var(--cursor);
+  --icon-size: var(--icon-m);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb:not(:focus-visible) {
+  box-shadow: none;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb:hover {
+  border-color: var(--background-modifier-border-hover);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb.mod-audio {
+  color: var(--color-purple);
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb.is-missing {
+  display: grid;
+  place-items: center;
+  border-style: dashed;
+  background: none;
+  color: var(--text-faint);
+  cursor: default;
+}
+
+/* Role top left, duration bottom left: light text on a dark plate, readable on any preview and theme. */
+.buba-inspector .buba-inspector-section .buba-gen-thumb-role,
+.buba-inspector .buba-inspector-section .buba-gen-thumb-badge {
+  position: absolute;
+  inset-inline-start: 3px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 6px);
+  padding: 2px 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.66);
+  color: #fff;
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb-role {
+  top: 3px;
+}
+
+/* Flex drops ellipsis on a bare text node: the text of an unknown role sits in its own span. */
+.buba-inspector .buba-inspector-section .buba-gen-thumb-role > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb-role.mod-icon {
+  padding: 2px;
+  --icon-size: 12px;
+  --icon-stroke: 2px;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb-badge {
+  bottom: 3px;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb-play {
+  display: flex;
+  --icon-size: 8px;
+}
+
+.buba-inspector .buba-inspector-section .buba-gen-thumb-play svg {
+  fill: currentColor;
+}
+
+.buba-gen-params {
+  margin-top: var(--size-4-3);
+}
+
+/* One list: the label column is the panel's shared width, not as wide as the longest label, so values line up
+   with the other sections; every cell stays on one line with "…" (section.ts `oneLine`). */
+.buba-inspector-rows.buba-gen-params {
+  grid-template-columns: round(up, var(--buba-label-width, 7em), 1px) minmax(0, 1fr);
+}
+
+.buba-inspector-rows.buba-gen-params > .buba-gen-cell {
+  width: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.is-mobile .buba-inspector-rows.buba-gen-params > .buba-gen-cell.is-expanded {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The prompt window: the whole text, selectable, scrolled; its length left of the copy button. */
+.buba-gen-prompt-full {
+  max-height: 60vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+}
+
+.buba-gen-prompt-count {
+  margin-inline-end: auto;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+}

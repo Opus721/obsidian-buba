@@ -1,0 +1,237 @@
+/* "Tags" and "Rating" sections of the file panel: tags as chips in Obsidian's tag colors with a color dot and
+   a group prefix, stars as icon buttons. All tag and round "+" borders and text baselines sit on whole CSS
+   px. Sizes are variables on the panel (the comment "Send" button in comments.css reads them too); the phone
+   has its own values (`.is-phone`, not `.is-mobile`: an iPad gets the desktop values): - `--buba-chip-pad-y`:
+   tag padding top and bottom, `--buba-chip-l`: left, `--buba-chip-r`: right; - `--buba-chip-fs`: tag text (a
+   whole number, not the fractional `--tag-size`), `--buba-chip-dot`: the dot (same size as in the tags tree),
+   `--buba-chip-dot-gap`: dot to name, `--buba-chip-x`: the cross, `--buba-chip-x-gap`: name to cross; -
+   `--buba-chip-dot-y`, `--buba-chip-text-y`, `--buba-chip-x-y`: vertical offsets; - `--buba-add-icon`: the
+   plus of the round "+" (and the "Send" icon on desktop), `--buba-add-icon-y`: its offset; - `--buba-chip-h`:
+   height of a tag and the round "+": x-height text (0.546 of the font size, measured) plus padding, rounded
+   to a whole pixel. `--buba-add-bg`: the grey background share of the round "+", the model for Buba's round
+   buttons; the comment "Send" button (comments.css) and the phone viewer's round buttons (viewer.css) read
+   it. The viewer is not in the panel, so the value is on `body`. */
+body {
+  --buba-add-bg: var(--buba-style-add-bg, 6%);
+}
+
+.buba-inspector {
+  --buba-chip-pad-y: var(--buba-style-chip-pad-y, 10px);
+  --buba-chip-l: var(--buba-style-chip-l, 10px);
+  --buba-chip-r: var(--buba-style-chip-r, 10px);
+  --buba-chip-fs: var(--buba-style-chip-fs, 13px);
+  --buba-chip-dot: var(--buba-style-tag-dot, 9px);
+  --buba-chip-dot-gap: var(--buba-style-chip-dot-gap, 9px);
+  --buba-chip-x: var(--buba-style-chip-x, 13px);
+  --buba-chip-x-gap: var(--buba-style-chip-x-gap, 20px);
+  --buba-chip-dot-y: 0px;
+  --buba-chip-text-y: 0px;
+  --buba-chip-x-y: 0px;
+  --buba-add-icon: var(--buba-style-add-icon, 13px);
+  --buba-add-icon-y: 0px;
+  --buba-chip-h: round(calc(var(--buba-chip-fs) * 0.546 + 2 * var(--buba-chip-pad-y)), 1px);
+}
+
+.is-phone .buba-inspector {
+  --buba-chip-pad-y: var(--buba-style-chip-pad-y-phone, 11px);
+  --buba-chip-l: var(--buba-style-chip-l-phone, 11px);
+  --buba-chip-r: var(--buba-style-chip-r-phone, 14px);
+  --buba-chip-fs: var(--buba-style-chip-fs-phone, 15px);
+  --buba-chip-x: var(--buba-style-chip-x-phone, 18px);
+  --buba-add-icon: var(--buba-style-add-icon-phone, 18px);
+}
+
+.buba-storage-heading {
+  margin-bottom: var(--size-4-2);
+  font-size: var(--font-ui-small);
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  color: var(--text-muted);
+}
+
+.buba-storage-note {
+  font-size: var(--font-ui-small);
+  color: var(--text-faint);
+}
+
+/* Tags and the round "+" in a wrapping row; a long name stays on one line with an ellipsis. */
+.buba-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-4-1);
+}
+
+/* A tag: height is text plus padding, rounded to a whole pixel; dot, name, count and cross sit whole pixels
+   below the top and do not change the tag height. Gaps are margins of the parts; the chip has `gap: 0`. */
+.buba-tag {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0;
+  max-width: 100%;
+  height: var(--buba-chip-h);
+  min-height: 0;
+  padding: 0 var(--buba-chip-r) 0 var(--buba-chip-l);
+  border: var(--tag-border-width) solid var(--tag-border-color);
+  border-radius: var(--tag-radius);
+  background-color: var(--tag-background);
+  color: var(--tag-color);
+  font-size: var(--buba-chip-fs);
+  font-weight: var(--tag-weight);
+  cursor: var(--cursor-link);
+}
+
+/* A click anywhere on the chip except the cross opens the tag grid (tags-section.ts): a hand cursor and a
+   hover highlight, like the tag pill in Obsidian's "Properties" (`.multi-select-pill:hover`, Obsidian 1.13).
+   The highlight applies only where hover exists, so it does not stick after a tap on a phone. The cross keeps
+   the cursor of Obsidian's icon button (`.clickable-icon`). */
+@media (hover: hover) {
+  .buba-tag:hover {
+    background-color: var(--tag-background-hover);
+    border-color: var(--tag-border-color-hover);
+    color: var(--tag-color-hover);
+  }
+}
+
+/* The one tag that is the grid's source stays highlighted without hover. */
+.buba-tag.is-source {
+  background-color: var(--tag-background-hover);
+  box-shadow: inset 0 0 0 var(--border-width) var(--interactive-accent);
+}
+
+.buba-tag .buba-color-dot {
+  width: var(--buba-chip-dot);
+  height: var(--buba-chip-dot);
+  margin: 0;
+  margin-inline-end: var(--buba-chip-dot-gap);
+  margin-top: round(down, calc((var(--buba-chip-h) - var(--buba-chip-dot)) / 2), 1px);
+  translate: 0 var(--buba-chip-dot-y);
+}
+
+/* Name and count sized by x-height: the line is trimmed to x-height (`text-box`), the box is that height
+   rounded up with the line at its bottom, so the baseline is on a whole pixel; placed whole pixels below the
+   tag top. */
+.buba-tag .buba-tag-name,
+.buba-tag .buba-tag-count {
+  --buba-chip-text-h: round(up, 1ex, 1px);
+  box-sizing: border-box;
+  align-self: flex-start;
+  height: var(--buba-chip-text-h);
+  margin-top: round(down, calc((var(--buba-chip-h) - var(--buba-chip-text-h)) / 2), 1px);
+  align-content: end;
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  text-box: trim-both ex alphabetic;
+  translate: 0 var(--buba-chip-text-y);
+}
+
+/* Name width follows the text, rounded to a whole pixel (`calc-size`; iPhone Safari lacks it and keeps a
+   fractional width), at most 20 characters. The ellipsis clips by width only: the line is taller than the
+   x-height box. */
+.buba-tag .buba-tag-name {
+  min-width: 0;
+  width: calc-size(max-content, round(up, size, 1px));
+  max-width: round(down, 20ch, 1px);
+  overflow-x: clip;
+  overflow-y: visible;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+/* The tag group as a muted "status/" prefix, like the parent of a nested tag in Obsidian's "Tags" view. */
+.buba-tag-chip-group {
+  color: var(--text-muted);
+}
+
+/* The count after the name ("2 of 3" when several files are selected), spaced like dot to name. */
+.buba-tag-count {
+  flex: none;
+  margin-inline-start: var(--buba-chip-dot-gap);
+  color: var(--text-muted);
+}
+
+/* The cross: Obsidian's 24 × 24 icon is drawn with a 5/24 inset, so "name to cross" and "right padding" are
+   measured to the drawn cross. The hit area spans the full tag height via a pseudo-element, without changing
+   the layout. The color comes from the chip: the cross is part of the chip, not a separate Buba icon button.
+   */
+.buba-tag .clickable-icon {
+  --icon-size: var(--buba-chip-x);
+  flex: none;
+  position: relative;
+  align-self: flex-start;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin-top: round(down, calc((var(--buba-chip-h) - var(--buba-chip-x)) / 2), 1px);
+  margin-inline-start: round(calc(var(--buba-chip-x-gap) - var(--buba-chip-x) * 5 / 24), 1px);
+  margin-inline-end: round(calc(var(--buba-chip-x) * -5 / 24), 1px);
+  overflow: visible;
+  color: inherit;
+  translate: 0 var(--buba-chip-x-y);
+}
+
+.buba-tag .clickable-icon::before {
+  content: '';
+  position: absolute;
+  inset: round(down, calc((var(--buba-chip-x) - var(--buba-chip-h)) / 2), 1px) 0;
+}
+
+/* Phone and tablet: a spacer covers the gap before the cross and opens the tag itself. The gap is the cross's
+   left margin: the spacer has the same width and a negative right margin, so the layout is unchanged. */
+.buba-tag-gap {
+  display: none;
+}
+
+.is-mobile .buba-tag-gap {
+  display: block;
+  flex: none;
+  align-self: stretch;
+  width: round(calc(var(--buba-chip-x-gap) - var(--buba-chip-x) * 5 / 24), 1px);
+  margin-inline-end: calc(-1 * round(calc(var(--buba-chip-x-gap) - var(--buba-chip-x) * 5 / 24), 1px));
+}
+
+/* "+ Tag" is a filled round Buba icon button (src/platform/icon-button.css) as tall as a tag. The plus sits
+   half the difference from the edge, rounded down. The selector specificity (0,3,0) beats Obsidian's tablet
+   rule `.is-tablet button:not(.clickable-icon)` (0,2,1, Obsidian 1.13 and 1.14), which would otherwise give
+   the button its side padding back on an iPad. */
+.buba-tags .buba-tag-add.buba-tag-add-round {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: var(--buba-chip-h);
+  height: var(--buba-chip-h);
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  --icon-size: var(--buba-add-icon);
+}
+
+.buba-tags .buba-tag-add.buba-tag-add-round > svg {
+  flex: none;
+  margin-top: round(down, calc((var(--buba-chip-h) - var(--buba-add-icon)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-chip-h) - var(--buba-add-icon)) / 2), 1px);
+  translate: 0 var(--buba-add-icon-y);
+}
+
+.buba-rating {
+  display: flex;
+  gap: var(--size-2-1);
+}
+
+/* Obsidian fills the background of an active icon button (`.clickable-icon.is-active`); for stars the rating
+   shows as a fill in Obsidian's accent color (it follows the theme and accent), and the background appears
+   only on hover, as for the other stars. */
+.buba-rating-star.is-active {
+  color: var(--interactive-accent);
+  background-color: transparent;
+}
+
+.buba-rating-star.is-active:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.buba-rating-star.is-active svg {
+  fill: currentColor;
+}

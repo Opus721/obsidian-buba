@@ -1,0 +1,214 @@
+/* "Comments" section of the file panel: the date below each comment's text, a cross on the right; at the
+   bottom a field and a round "Send" button. Text lines have whole-pixel heights. */
+.buba-comments-title {
+  font-size: var(--font-ui-small);
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+}
+
+.buba-comments-note {
+  margin-top: var(--size-4-2);
+  font-size: var(--font-ui-small);
+  color: var(--text-faint);
+}
+
+.buba-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-4-1);
+  margin-top: var(--size-4-2);
+}
+
+/* Check, text and cross align on the first text baseline: the middles of the check and the cross sit at the
+   middle of the first line's capitals, for one-line and multi-line comments alike. */
+.buba-comment-body {
+  flex: auto;
+  min-width: 0;
+  align-self: baseline;
+}
+
+/* The "Delete comment" cross does not shrink for long text: it stays in one place on every row while the text
+   wraps by words. Positioned like the check below: an icon button's baseline is the icon's bottom, shifted
+   down by half the icon minus half the text font's cap height (`cap`); the negative top margin of the button
+   height keeps it from stretching the row. The look is Buba's shared medium icon button
+   (src/platform/icon-button.css). */
+.buba-comment > .buba-icon-button {
+  flex: none;
+  align-self: baseline;
+  position: relative;
+  margin-top: calc(-1 * var(--buba-row-h));
+  top: round(calc(var(--buba-icon-button-medium-icon) / 2 - 0.5cap), 1px);
+  font-size: var(--font-ui-small);
+}
+
+/* Comment line breaks stay as typed. The text has the same size as in the field and the panel rows. Text and
+   date lines have whole-pixel heights, so the field and "Send" below them sit on whole pixels. */
+.buba-comment-text {
+  font-size: var(--font-ui-small);
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* The date is quieter than the text, in the color of the "On boards" empty note (`.buba-storage-note`,
+   tags-rating.css), spaced from the text like a setting description under its name in Obsidian
+   (`.setting-item-description`, `padding-top: var(--size-4-1)`). */
+.buba-comment-meta {
+  margin-top: var(--size-4-1);
+  font-size: var(--font-ui-smaller);
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  color: var(--text-faint);
+}
+
+/* The "done" check is Obsidian's task checkbox (`input[type=checkbox]`, `task-list-item-checkbox`): its size,
+   tick and checked color, but round. The empty border is `--text-muted` rather than Obsidian's
+   `--text-faint`, which is 2.1–2.9 : 1 on the panel background, under the 3 : 1 needed for borders. Done text
+   is grey without strikethrough, halfway between Obsidian's done task color and `--text-faint`: the task
+   color (`--text-muted`) does not read as grey next to normal text, and `--text-faint` is under 3 : 1. */
+.buba-comment-check {
+  --checkbox-radius: 50%;
+  --checkbox-border-color: var(--text-muted);
+  --checkbox-border-color-hover: var(--text-normal);
+}
+
+/* The check follows the checkbox of the "File type" window (type-filter.css): round, sized like an Obsidian
+   modal checkbox (`.modal { --checkbox-size: var(--font-ui-medium) }`: 15 px on desktop, 16 on a phone), with
+   Obsidian's checked border and color, and an 8 px gap to the text: Obsidian's own checkbox margin (6) is
+   replaced by a `--size-4-1` margin plus the row gap `--size-4-1`. Vertically its bottom edge is on the first
+   line's baseline (a checkbox's baseline is its bottom), it does not stretch the row (negative top margin of
+   its size), and it is shifted down by half its size minus half the text font's cap height, so its middle is
+   at the middle of the capitals. Specificity (0,2,0) beats Obsidian's `input[type="checkbox"]` (0,1,1) and
+   its `margin`. */
+.buba-comment > .buba-comment-check {
+  --checkbox-size: var(--font-ui-medium);
+  align-self: baseline;
+  margin-top: calc(-1 * var(--checkbox-size));
+  margin-inline-end: var(--size-4-1);
+  top: round(calc(var(--checkbox-size) / 2 - 0.5cap), 1px);
+  font-family: inherit;
+  font-size: var(--font-ui-small);
+}
+
+/* The "Done (N)" row looks like the header of an Obsidian collapsible section: the `collapse-icon` arrow
+   (look and rotation by Obsidian), a label quieter than the text, no border or background. The arrow is in
+   the check column, as wide as a checkbox, the label in the text column, with the same gap as from the check
+   to the text (`--size-4-1` margin + `--size-4-1` row gap). */
+.buba-comments-done-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  width: fit-content;
+  margin-top: var(--size-4-2);
+  font-size: var(--font-ui-small);
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  color: var(--text-muted);
+  cursor: var(--cursor);
+  user-select: none;
+}
+
+.buba-comments-done-toggle > .collapse-icon {
+  justify-content: center;
+  width: var(--font-ui-medium);
+}
+
+@media (hover: hover) {
+  .buba-comments-done-toggle:hover {
+    color: var(--text-normal);
+  }
+}
+
+.buba-comment.is-done .buba-comment-text {
+  color: color-mix(in srgb, var(--checklist-done-color) 50%, var(--text-faint));
+}
+
+/* Field and button: while the text fits left of the button they share one row with the button on the right;
+   otherwise (`is-wrapped`, set by comments-section.ts) the field takes the full width and the button goes
+   below it at the right edge. The field grows with the text by whole lines (comments-section.ts sets the row
+   count), so it has no resize handle. */
+.buba-comments-new {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-3);
+}
+
+.buba-comments-new.is-wrapped {
+  flex-wrap: wrap;
+}
+
+/* The field is a standard Obsidian field: its background, border and radius, nothing of our own. On one line
+   it has Obsidian's `--input-height`, like "Name" and "Link": the top padding is half the free space rounded
+   down, the bottom gets the rest. */
+.buba-comments-new textarea {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  resize: none;
+  overflow-y: hidden;
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  --buba-comment-free: calc(
+    var(--input-height) - round(calc(var(--line-height-tight) * 1em), 1px) - 2 * var(--input-border-width)
+  );
+  padding-top: round(down, calc(var(--buba-comment-free) / 2), 1px);
+  padding-bottom: calc(var(--buba-comment-free) - round(down, calc(var(--buba-comment-free) / 2), 1px));
+}
+
+/* The "N left" counter sits under the field, left of "Send"; quiet: the font and line of the date under a
+   comment, in `--text-muted`. While plenty is left it is hidden (`hidden`, set by comments-section.ts). */
+.buba-comments-left {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-ui-smaller);
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  color: var(--text-muted);
+}
+
+.buba-comments-new.is-wrapped textarea {
+  flex-basis: 100%;
+}
+
+/* "Send" is a round icon button without border or shadow, sized to Obsidian's `--input-height` like the
+   comment field next to it. The icon sits exactly in the middle of the circle: with an odd difference between
+   circle and icon it used to sit 0.5 px left and up. On desktop the icon is 1 px smaller than the round "+"
+   of tags (tags-rating.css), 12 px in a 30 px circle; on a phone it matches the viewer arrows
+   (`--buba-nav-icon`, viewer.css), 18 px in a 44 px circle. Fill and icon are the same as the tags "+", on
+   hover too: neutral on desktop and phone in both themes, since the `mod-cta` accent pulls too much
+   attention. This uses the shared filled Buba icon button rule (src/platform/icon-button.css), without border
+   or shadow. No iOS button edge. The icon sits half the difference from the edge, rounded down. The keyboard
+   focus ring is Obsidian's. Specificity (0,3,0) beats `.is-tablet button:not(.clickable-icon)` and
+   `button:not(.clickable-icon).mobile-tap` (0,2,1). */
+.buba-inspector .buba-comments-new .buba-comment-send {
+  --buba-send-size: var(--input-height);
+  --buba-send-icon: calc(var(--buba-add-icon) - 1px);
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: var(--buba-send-size);
+  height: var(--buba-send-size);
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  --icon-size: var(--buba-send-icon);
+}
+
+.buba-inspector .buba-comments-new .buba-comment-send > svg {
+  flex: none;
+  margin-top: round(down, calc((var(--buba-send-size) - var(--buba-send-icon)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-send-size) - var(--buba-send-icon)) / 2), 1px);
+}
+
+.is-phone .buba-inspector .buba-comments-new .buba-comment-send {
+  --buba-send-size: var(--input-height);
+  --buba-send-icon: var(--buba-nav-icon);
+}
+
+.is-phone .buba-inspector .buba-comments-new .buba-comment-send::after {
+  display: none;
+}

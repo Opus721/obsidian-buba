@@ -1,0 +1,196 @@
+/* File panel: sections stacked, fields as label and value in two columns. Panel sizes:
+   - `--buba-label-width`: the label column, shared by all sections; fits the longest label (6.3 em in the
+     Windows UI font, Obsidian 1.14) with room for the iPhone font; in em, so it grows with the label font;
+   - `--buba-button-height`: Obsidian's touch size, 24 px on desktop and 30 px on phone and tablet
+     (`--touch-size-*`): the minimum height of the path button on phone and tablet; the fallback is for
+     versions without these variables (minAppVersion 1.12.3).
+   Label-value rows use design values; the phone has its own (`.is-phone`, not `.is-mobile`: an iPad gets the
+   desktop values):
+   - `--buba-row-h`: row height, the square of Buba's medium icon button ("Copy path"), 24 / 30
+     (src/platform/icon-button.css);
+   - `--buba-row-gap`: gap between rows. */
+.buba-inspector {
+  --buba-label-width: 7em;
+  --buba-button-height: var(--touch-size-xxs, 24px);
+  --buba-row-h: var(--buba-icon-button-medium-box);
+  --buba-row-gap: 0px;
+}
+
+.is-mobile .buba-inspector {
+  --buba-button-height: var(--touch-size-xs, 30px);
+}
+
+/* Sections as equal strips: 12 px above the line and 12 px below; a hidden section (`hide()`) takes no space.
+   */
+.buba-inspector-section + .buba-inspector-section {
+  margin-top: var(--size-4-3);
+  padding-top: var(--size-4-3);
+  border-top: var(--border-width) solid var(--background-modifier-border);
+}
+
+/* Preview: height at most the section width; a tall image is fitted whole into a centered square, a wide one
+   fills the width. The limit is in `cqw` (1 % of the frame width), so it follows the panel width. */
+.buba-inspector-preview {
+  container-type: inline-size;
+}
+
+/* Preview height rounded to a whole pixel: an image fitted to the panel width and the placeholder icon row
+   have fractional heights, which put everything below on fractional pixels. Uses `calc-size`; iPhone Safari
+   lacks it and keeps the image height. */
+.buba-inspector-preview {
+  height: calc-size(auto, round(up, size, 1px));
+}
+
+.buba-inspector-preview:has(> img) {
+  text-align: center;
+}
+
+.buba-inspector-preview img {
+  max-width: 100%;
+  max-height: 100cqw;
+  object-fit: contain;
+}
+
+/* File name and extension: the text line has a whole-pixel height. The extension is sized by cap height: the
+   line is trimmed to it (`text-box`), the box is the cap height rounded up with the line at its bottom,
+   offset from the field top by whole pixels. This keeps the baseline on a whole pixel even at 200 % zoom,
+   where a whole-height line put it on a half pixel. Width is rounded to a whole pixel (`calc-size`; iPhone
+   Safari lacks it). */
+.buba-inspector-name {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-4-1);
+}
+
+.buba-inspector-name input {
+  flex: auto;
+  min-width: 0;
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+}
+
+.buba-inspector-ext {
+  flex: none;
+  color: var(--text-muted);
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+}
+
+.buba-inspector-name > .buba-inspector-ext {
+  --buba-ext-h: round(up, 1cap, 1px);
+  box-sizing: border-box;
+  width: calc-size(max-content, round(up, size, 1px));
+  height: var(--buba-ext-h);
+  margin-top: round(down, calc((var(--input-height) - var(--buba-ext-h)) / 2), 1px);
+  align-content: end;
+  text-box: trim-both cap alphabetic;
+}
+
+.buba-inspector-count {
+  font-weight: var(--font-semibold);
+}
+
+/* Fields of all sections share one label column, so values start on one vertical line. A label longer than
+   the column (another font) widens it instead of being cut. Rows have one height, that of the "Copy path"
+   button, including the preview's "Resolution" and "Duration"; an expanded path on a phone grows downward.
+   Label, value and path sit half the difference below the row top, rounded down, so baselines land on whole
+   pixels. The label column and label width are rounded to whole pixels. */
+.buba-inspector-rows {
+  display: grid;
+  grid-template-columns: minmax(round(up, var(--buba-label-width, 7em), 1px), max-content) minmax(0, 1fr);
+  grid-auto-rows: minmax(var(--buba-row-h), auto);
+  align-items: start;
+  gap: var(--buba-row-gap) var(--size-4-3);
+  font-size: var(--font-ui-small);
+}
+
+.buba-inspector-rows > .buba-inspector-label,
+.buba-inspector-rows > .buba-inspector-value:not(.buba-inspector-path),
+.buba-inspector-path > .buba-inspector-path-text {
+  align-self: flex-start;
+  margin-top: round(
+    down,
+    calc((var(--buba-row-h) - round(calc(var(--line-height-tight) * 1em), 1px)) / 2),
+    1px
+  );
+}
+
+.buba-inspector-rows > .buba-inspector-label {
+  width: calc-size(max-content, round(up, size, 1px));
+}
+
+/* Spacing from the name field or the file count above the fields. A section that starts with fields
+   ("Resolution") has none, so its strip below the line is the same 12 px as the others. */
+.buba-inspector-rows:not(:first-child) {
+  margin-top: var(--size-4-2);
+}
+
+.buba-inspector-label {
+  color: var(--text-muted);
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+}
+
+.buba-inspector-value {
+  overflow-wrap: anywhere;
+  user-select: text;
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+}
+
+/* File facts wrap rather than clip when the panel is narrow: a 12-hour date and time keeps its AM/PM. */
+.buba-inspector-fact {
+  min-width: 0;
+}
+
+/* The path on one line with "…" at the end, the full path as a hover tooltip (file-section.ts); "Copy path"
+   on the right. */
+.buba-inspector-path {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  min-width: 0;
+}
+
+.buba-inspector-path-text {
+  flex: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+}
+
+.buba-inspector-path .clickable-icon {
+  flex: none;
+}
+
+.is-mobile .buba-inspector-path {
+  align-items: flex-start;
+}
+
+.is-mobile .buba-inspector-path-text[role='button'] {
+  min-height: var(--buba-button-height);
+  align-content: center;
+  cursor: var(--cursor);
+}
+
+.is-mobile .buba-inspector-path-text.is-expanded {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The phone and tablet path button is as tall as the row: its text line sits whole pixels below the top via
+   padding, not centered. */
+.is-mobile .buba-inspector-path > .buba-inspector-path-text[role='button'] {
+  box-sizing: border-box;
+  margin-top: 0;
+  align-content: start;
+  padding-top: round(
+    down,
+    calc((var(--buba-row-h) - round(calc(var(--line-height-tight) * 1em), 1px)) / 2),
+    1px
+  );
+}
+
+/* Panel tag text: a whole-pixel line height; positioning is in tags-rating.css. */
+.buba-text-center {
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+}

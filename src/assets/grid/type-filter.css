@@ -1,0 +1,298 @@
+/* "File type" (type-filter.ts): the checkbox window and the caption above the grid. A window row looks like a
+   row of the Bases properties list (`.bases-toolbar-menu-item`: padding, gap, hover highlight); Obsidian
+   styles every `input[type=checkbox]` itself. Row and close button sizes are variables in the two rules below
+   (desktop; phone in `.is-phone`, an iPad gets desktop values); any other literal numbers must be on the test
+   allow-list. Rows have whole-pixel heights, checkbox and text sit whole
+   pixels below the row top. `--buba-win-x` is our own, not from the color window: window modules do not
+   depend on each other. */
+.buba-types-modal {
+  --buba-tw-pad-y: 3px;
+  --buba-tw-pad-x: 2px;
+  --buba-tw-gap: 8px;
+  --buba-tw-cb: 15px;
+  --buba-tw-text-y: -1px;
+  --buba-win-x: 6px;
+}
+
+.is-phone .buba-types-modal {
+  --buba-tw-pad-y: 4px;
+  --buba-tw-pad-x: 6px;
+  --buba-tw-cb: 16px;
+  --buba-win-x: 12px;
+}
+
+.buba-types {
+  display: flex;
+  flex-direction: column;
+}
+
+/* "Find type" field. The window keeps its top in place, like Obsidian's command palette (`.prompt`): typing
+   shortens the list from the bottom and the field does not jump as it would in a centered window. Height is
+   at most the palette's; a long list scrolls under the field, while "Keep on navigation" and the field stay
+   visible. */
+.modal.buba-types-modal {
+  align-self: flex-start;
+  margin-top: calc((100vh - var(--prompt-max-height)) / 2);
+  max-height: var(--prompt-max-height);
+}
+
+/* Phone: the top sits under the header, like the command palette on a phone (`.is-phone .prompt`). */
+.is-phone .modal.buba-types-modal {
+  margin-top: calc(var(--safe-area-inset-top) + var(--header-height) + var(--size-4-4));
+  max-height: min(
+    var(--prompt-max-height),
+    calc(
+      100vh - var(--safe-area-inset-top) - var(--header-height) - var(--size-4-4) -
+        var(--safe-area-inset-bottom)
+    )
+  );
+}
+
+.buba-types-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.buba-types-modal .search-input-container {
+  flex: none;
+  margin-bottom: var(--size-4-2);
+}
+
+.buba-types-modal .buba-types {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.buba-types-row,
+.buba-types-keep {
+  --buba-tw-line: round(calc(var(--line-height-tight) * 1em), 1px);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--buba-tw-gap);
+  padding: var(--size-2-2) var(--size-2-3);
+  line-height: var(--buba-tw-line);
+  border-radius: var(--radius-s);
+  cursor: var(--cursor);
+}
+
+.is-phone .buba-types-row,
+.is-phone .buba-types-keep {
+  --buba-tw-line: round(calc(var(--line-height-normal) * 1em), 1px);
+}
+
+.buba-types-row {
+  padding: var(--buba-tw-pad-y) var(--buba-tw-pad-x);
+}
+
+.buba-types-keep {
+  padding-inline: var(--buba-tw-pad-x);
+}
+
+/* The checkbox gets the row font (Chromium inputs have their own, so its `em` would differ) and its own size;
+   checkbox and text are centered on each other, whole pixels below the row top; the text is also shifted by
+   `--buba-tw-text-y`. */
+.buba-types-row > input[type='checkbox'] {
+  font-size: inherit;
+  width: var(--buba-tw-cb);
+  height: var(--buba-tw-cb);
+  margin-top: max(0px, round(down, calc((var(--buba-tw-line) - var(--buba-tw-cb)) / 2), 1px));
+}
+
+.buba-types-row > .buba-types-name,
+.buba-types-row > .buba-types-count {
+  position: relative;
+  top: var(--buba-tw-text-y);
+  margin-top: max(0px, round(down, calc((var(--buba-tw-cb) - var(--buba-tw-line)) / 2), 1px));
+}
+
+.buba-types-keep > span {
+  margin-top: max(
+    0px,
+    round(
+      down,
+      calc((var(--toggle-thumb-height) + 2 * var(--toggle-border-width) - var(--buba-tw-line)) / 2),
+      1px
+    )
+  );
+}
+
+/* Width follows the text, rounded to a whole pixel (iPhone Safari lacks `calc-size` and keeps a fraction). */
+.buba-types-name,
+.buba-types-count,
+.buba-types-keep > span {
+  width: calc-size(max-content, round(up, size, 1px));
+}
+
+.buba-types-modal .modal-title {
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+}
+
+.buba-types-modal .modal-header {
+  margin-bottom: round(0.75em, 1px);
+}
+
+/* Phone: no bottom margin under the header, as in Obsidian (`.is-phone .modal-header`); the rule above
+   overrode it. */
+.is-phone .buba-types-modal .modal-header {
+  margin-bottom: 0;
+}
+
+/* Phone: the title fills the header width with centered text; Obsidian's width-by-letters and `auto` margins
+   put the box on a fractional pixel. The text does not run under the close button: padding on both sides
+   covers its circle beyond the header padding, as in the color window. */
+.is-phone .buba-types-modal .modal-title {
+  flex: auto;
+  min-width: 0;
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: calc(var(--buba-nav-size) + var(--buba-win-x) - var(--size-4-5));
+}
+
+/* The close button has one offset from top and right, as in the color window. On a phone it is the same round
+   button as in the viewer (`--buba-nav-*`, viewer.css): no outline, shadow or iOS button edge. */
+.buba-types-modal.modal > .modal-header-button {
+  top: var(--buba-win-x);
+  inset-inline-end: var(--buba-win-x);
+}
+
+.is-phone .buba-types-modal.modal > .modal-header-button {
+  box-sizing: border-box;
+  width: var(--buba-nav-size);
+  height: var(--buba-nav-size);
+  padding: 0;
+  border: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  background: var(--buba-nav-bg);
+  color: var(--icon-color);
+}
+
+.is-phone .buba-types-modal.modal > .modal-header-button:not(:focus-visible) {
+  box-shadow: none;
+}
+
+.is-phone .buba-types-modal.modal > .modal-header-button::after {
+  display: none;
+}
+
+.is-phone .buba-types-modal.modal > .modal-header-button > svg {
+  flex: none;
+  width: var(--buba-nav-icon);
+  height: var(--buba-nav-icon);
+  margin-top: round(down, calc((var(--buba-nav-size) - var(--buba-nav-icon)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-nav-size) - var(--buba-nav-icon)) / 2), 1px);
+}
+
+@media (hover: hover) {
+  .buba-types-row:hover {
+    background-color: var(--background-modifier-hover);
+  }
+}
+
+/* The row already has a gap, so Obsidian's own checkbox margin is not needed here. */
+.buba-types-row input[type='checkbox'] {
+  margin-inline-end: 0;
+}
+
+/* "All types" is separated from the types by a line, like an Obsidian menu section: the gap around the line
+   is equal above and below, like `.menu-separator`, measured to the text. The text is shifted by
+   `--buba-tw-text-y`: above the line it is |text-y| farther from it, below closer; so the bottom padding of
+   "All types" is `size-2-2 + pad-y` minus two shifts, and the text distance above = below =
+   `size-2-2 + pad-y + text-y` for any window values. */
+.buba-types-row.mod-all {
+  margin-bottom: var(--size-2-2);
+  padding-bottom: calc(
+    var(--size-2-2) + var(--buba-tw-pad-y) + var(--buba-tw-text-y) + var(--buba-tw-text-y)
+  );
+  border-bottom: var(--border-width) solid var(--background-modifier-border);
+  border-radius: 0;
+}
+
+.buba-types-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* File counts on the right in tabular digits, so the column is even. */
+.buba-types-count {
+  margin-inline-start: auto;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Phone: rows are 32 px, not 44; an iPad gets desktop values. "Keep on navigation" is finger-sized, at least
+   Obsidian's `--touch-size-m` (44 px). */
+.is-phone .buba-types-row {
+  min-height: 0;
+}
+
+.is-mobile .buba-types-keep {
+  min-height: var(--touch-size-m);
+}
+
+/* The filter caption "PSD · 12 of 340" sits in the group with the place name (`.buba-grid-path-title`,
+   toolbar.css), in Obsidian's accent color, so an active filter is visible. It does not shrink itself: when
+   the row is full, the place name shrinks. At most the row width minus `--size-4-12` for the place name
+   (`100cqi` is the width of the `.buba-grid-toolbar` row, the query container, toolbar.css): long types
+   ("PHOTOSHOP-BACKUP, …") shrink with an ellipsis inside, but the counts never do, or they were pushed past
+   the row edge. The base is the row, not the group: the group is sized by its content, and a percentage of it
+   cut the caption to "48 px − name width" on a free row; the group is tight only on a row without controls,
+   where path = row. */
+.buba-grid-types {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: calc(100cqi - var(--size-4-12));
+  padding: var(--size-2-1) var(--size-4-1);
+  color: var(--text-accent);
+  font-size: var(--font-ui-small);
+  line-height: var(--buba-tb-text-line);
+  white-space: nowrap;
+}
+
+/* Width follows the text, rounded up; the line is the toolbar row minus the text padding (toolbar.css). */
+.buba-grid-types-names {
+  width: var(--buba-tb-fit);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Counts " · 12 of 340": `pre` keeps the leading space. */
+.buba-grid-types-tally {
+  flex: none;
+  width: var(--buba-tb-fit);
+  white-space: pre;
+}
+
+/* The empty result note comes after the group and shrinks with an ellipsis first, together with the path
+   ancestors (`flex-shrink: 100`, like Obsidian's `.view-header-title-parent`): a phone has one row. The
+   meaning is at the start ("— no files…"), since the ellipsis eats the end. `pre` keeps the leading space. */
+.buba-grid-types-empty {
+  flex: 0 100 auto;
+  min-width: 0;
+  padding: var(--size-2-1) 0;
+  overflow: hidden;
+  color: var(--text-accent);
+  font-size: var(--font-ui-small);
+  line-height: var(--buba-tb-text-line);
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.buba-types-keep {
+  margin-bottom: var(--size-4-2);
+  padding-bottom: var(--size-4-2);
+  border-bottom: var(--border-width) solid var(--background-modifier-border);
+  border-radius: 0;
+}
+
+.buba-types-keep .checkbox-container {
+  flex: none;
+  margin-inline-start: auto;
+}

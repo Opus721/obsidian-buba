@@ -1,0 +1,126 @@
+/* Buba icon button (icon-button.ts), one style for the whole plugin. The icon uses the color and opacity of
+   Obsidian's icon buttons (`--icon-color`, `--icon-opacity`; on hover and press `--icon-color-hover`,
+   `--icon-opacity-hover`; `.clickable-icon`, app.css 1.14.4) in every theme. The × in a tag chip belongs to
+   the chip and uses the tag color (tags-rating.css), not this button. Disabled looks like Obsidian's
+   (`.clickable-icon[aria-disabled='true']`): same color, opacity 0.4, no hover change. Checked (`.is-active`,
+   e.g. a set rating star) takes the color of its context. No border or shadow; the keyboard focus ring is
+   Obsidian's. Rules are prefixed with `body` so they are not weaker than Obsidian's
+   `button:not(.clickable-icon)` (0,1,1), which paints `<button>` with text color and background; at equal
+   specificity plugin styles come later.
+
+   Sizes live here, one set for the whole plugin (file panel rows and the grid toolbar read them for button
+   height):
+   - small (`mod-small`): 14px icon in a 22px square, the grid toolbar;
+   - medium (`mod-medium`): 16 in 24, 18 in 30 on phones, file panel rows; fixed numbers rather than
+     `--icon-size`, because on iPhone Obsidian's icon size follows the iOS text size and is fractional;
+   - no size: Obsidian's size (`.clickable-icon` of the context) or the context's own: the round "+ Tag", the
+     comment "Send", the round buttons of the color dialog.
+   The icon is offset from the square's edge by half the difference rounded down, to stay on whole pixels.
+   Phone means `.is-phone`, not `.is-mobile`, so iPad gets the desktop numbers. */
+body {
+  --buba-icon-button-small-icon: 14px;
+  --buba-icon-button-small-box: 22px;
+  --buba-icon-button-medium-icon: 16px;
+  --buba-icon-button-medium-box: 24px;
+}
+
+body.is-phone {
+  --buba-icon-button-medium-icon: 18px;
+  --buba-icon-button-medium-box: 30px;
+}
+
+body .buba-icon-button {
+  color: var(--icon-color);
+  border: 0;
+}
+
+body .buba-icon-button:not(:focus-visible) {
+  box-shadow: none;
+}
+
+body .buba-icon-button > svg {
+  opacity: var(--icon-opacity);
+}
+
+@media (hover: hover) {
+  body .buba-icon-button:not(.is-active, [aria-disabled='true'], .is-disabled, :disabled):hover {
+    color: var(--icon-color-hover);
+  }
+
+  body .buba-icon-button:not([aria-disabled='true'], .is-disabled, :disabled):hover > svg {
+    opacity: var(--icon-opacity-hover);
+  }
+}
+
+body
+  .buba-icon-button:not([aria-disabled='true'], .is-disabled, :disabled):is(
+    :active,
+    .mobile-tap,
+    .has-active-menu
+  )
+  > svg {
+  opacity: var(--icon-opacity-hover);
+}
+
+body .buba-icon-button:is([aria-disabled='true'], .is-disabled, :disabled) {
+  color: var(--icon-color);
+  opacity: 0.4;
+}
+
+body .buba-icon-button:not(.mod-filled):is([aria-disabled='true'], .is-disabled, :disabled) {
+  background-color: transparent;
+}
+
+/* Fill: a grey background mixed from the text color, 6% denser on hover and press. */
+body .buba-icon-button.mod-filled {
+  background-color: color-mix(in srgb, var(--text-normal) 6%, transparent);
+}
+
+@media (hover: hover) {
+  body .buba-icon-button.mod-filled:not([aria-disabled='true'], .is-disabled, :disabled):hover {
+    background-color: color-mix(in srgb, var(--text-normal) 12%, transparent);
+  }
+}
+
+body
+  .buba-icon-button.mod-filled:not([aria-disabled='true'], .is-disabled, :disabled):is(:active, .mobile-tap) {
+  background-color: color-mix(in srgb, var(--text-normal) 12%, transparent);
+}
+
+body .buba-icon-button.mod-small {
+  --buba-icon-button-icon: var(--buba-icon-button-small-icon);
+  --buba-icon-button-box: var(--buba-icon-button-small-box);
+}
+
+body .buba-icon-button.mod-medium {
+  --buba-icon-button-icon: var(--buba-icon-button-medium-icon);
+  --buba-icon-button-box: var(--buba-icon-button-medium-box);
+}
+
+body .buba-icon-button.mod-small,
+body .buba-icon-button.mod-medium {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: var(--buba-icon-button-box);
+  height: var(--buba-icon-button-box);
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  --icon-size: var(--buba-icon-button-icon);
+}
+
+body .buba-icon-button.mod-small > svg,
+body .buba-icon-button.mod-medium > svg {
+  flex: none;
+  margin-top: round(down, calc((var(--buba-icon-button-box) - var(--buba-icon-button-icon)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-icon-button-box) - var(--buba-icon-button-icon)) / 2), 1px);
+}
+
+/* Phone: corner radius as on Obsidian's icon buttons. */
+body.is-phone .buba-icon-button.mod-small,
+body.is-phone .buba-icon-button.mod-medium {
+  border-radius: var(--clickable-icon-radius);
+}

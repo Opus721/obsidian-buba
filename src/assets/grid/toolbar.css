@@ -1,0 +1,175 @@
+/* Toolbar above the grid: the path, with view controls on the right; without enough width the controls wrap
+   to the next row. Back and forward are Obsidian's tab arrows. The path uses the path classes of Obsidian's
+   view header. The row is a query container (`container-type: inline-size`, like the Bases header
+   `.bases-header`): the type filter caption's limit (`100cqi`, type-filter.css) is computed from its width,
+   not from the name group, whose width follows its content, so a percentage of it cut the caption on a free
+   row. Not on the path: a container sized by its content has zero width, and the controls would never wrap.
+   Sizes live only in this rule's variables (phone below): button gap, row gap, row padding top and sides.
+   Buttons are small Buba icon buttons, a 14 icon in a 22 square (src/platform/icon-button.css). The toolbar
+   row is as tall as a button, and everything in it sits whole pixels below its top: no fractional positions.
+   The text line of the path and the filter caption is the toolbar row minus the text padding
+   (`--buba-tb-text-line`); width follows the text, rounded up (`--buba-tb-fit`; iPhone Safari lacks
+   `calc-size` and keeps a fraction). The filter caption (type-filter.css) takes these from here. */
+.buba-grid-toolbar {
+  --buba-tb-ctl-gap: 3px;
+  --buba-tb-gap: 10px;
+  --buba-tb-pad-y: 4px;
+  --buba-tb-pad-x: 6px;
+  --buba-tb-row: var(--buba-icon-button-small-box);
+  --buba-tb-text-line: calc(var(--buba-tb-row) - 2 * var(--size-2-1));
+  --buba-tb-fit: calc-size(max-content, round(up, size, 1px));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--buba-tb-gap);
+  padding: var(--buba-tb-pad-y) var(--buba-tb-pad-x);
+  border-bottom: var(--border-width) solid var(--background-modifier-border);
+  container-type: inline-size;
+}
+
+/* Phone: no buttons above the grid, so the row follows the path text (Obsidian's line height × font, rounded,
+   plus text padding); row padding 4 and 4. */
+.is-phone .buba-grid-toolbar {
+  --buba-tb-pad-x: 4px;
+  --buba-tb-row: calc(
+    round(calc(var(--line-height-tight) * var(--font-ui-medium)), 1px) + 2 * var(--size-2-1)
+  );
+}
+
+/* The path takes its full length: if it does not fit next to the controls, the controls wrap below. If it
+   does not fit a row either, it behaves like Obsidian's view header title: ancestors in
+   `.view-header-title-parent` shrink first (Obsidian's `flex: 0 100 auto`) and the open folder name stays
+   whole while it fits. The name is grouped with the type filter caption (`.buba-grid-path-title`, like
+   Obsidian's `.view-header-title`: `flex: 0 0 auto; max-width: 100%`): while the group fits, it stays whole;
+   when it does not fit even alone, the path is alone on its row (controls below), path = row, and only the
+   name shrinks inside the group: the caption is at most the row minus `--size-4-12` (type-filter.css),
+   leaving 48 px for the place name. */
+.buba-grid-toolbar .buba-grid-path {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  align-items: flex-start;
+}
+
+.buba-grid-path .view-header-title-parent {
+  align-items: flex-start;
+}
+
+.buba-grid-path .view-header-breadcrumb {
+  cursor: var(--cursor);
+}
+
+/* Path text fills the toolbar row minus the text padding; width follows the text, rounded to a whole pixel.
+   */
+.buba-grid-path .view-header-breadcrumb,
+.buba-grid-path .view-header-breadcrumb-separator,
+.buba-grid-path-current {
+  width: var(--buba-tb-fit);
+  line-height: var(--buba-tb-text-line);
+}
+
+.buba-grid-path-title {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: last baseline;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.buba-grid-path-current {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: var(--size-2-1) var(--size-4-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-normal);
+}
+
+/* Controls (the "File type" funnel, the "View" button, the size slider; toolbar.ts) form one group, so
+   elements stay on one row in the same places and do not jump. The group picks its row by its full width;
+   only when it is wider than the row (a narrow sidebar, under 288 px) does it shrink to the row and wrap
+   inside itself: the slider moves to the next row whole instead of running off the edge, as Obsidian wraps
+   the buttons above the file explorer (`.nav-buttons-container`). */
+.buba-grid-toolbar-controls {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+  align-items: flex-start;
+  height: var(--buba-tb-row);
+  gap: var(--buba-tb-ctl-gap);
+}
+
+/* The size number of Obsidian's slider (`.slider-value`) is three digits wide: sizes are 80–400 and
+   Obsidian's digits have one width (`tabular-nums`). Going from 100 to 90 the number does not narrow, so the
+   funnel and "View" button do not shift (by 7 px otherwise). Width rounded up to a whole pixel, the line
+   fills the toolbar row. */
+.buba-grid-toolbar-controls .slider-value {
+  min-width: round(up, 3ch, 1px);
+  width: var(--buba-tb-fit);
+  line-height: var(--buba-tb-row);
+  text-align: end;
+}
+
+/* Slider at Obsidian's width; the track sits whole pixels below the row top. */
+.buba-grid-toolbar-controls .slider {
+  margin-top: round(down, calc((var(--buba-tb-row) - var(--slider-track-height)) / 2), 1px);
+}
+
+/* Phone: one row above the grid, the path; view items live in the view header's "More" menu (toolbar.ts,
+   paneMenu). Obsidian sets `is-phone` on `body`. */
+.is-phone .buba-grid-toolbar-controls {
+  display: none;
+}
+
+/* The button capsule in the grid view header ("Add files" and ⋮) is Obsidian's `.view-actions`, with the
+   buttons flush. Only in the Buba grid header; other views' headers are untouched. No gap between buttons: on
+   phone and tablet Obsidian has `--size-2-1` (`.is-mobile .view-actions`, Obsidian 1.14). The visible empty
+   space is the buttons' own padding: on a phone Obsidian stretches a header button to `--view-header-height`
+   (44 × 44, `.is-phone .view-header .view-action`) with the icon centered, 33 px between icons. The button
+   width follows its content, like `.clickable-icon` on desktop and tablet
+   (`.is-mobile .view-action { width: auto }`): the icon plus its padding is 36 px with the 24 px phone icon;
+   the 44 px height for the finger is unchanged. Only capsule buttons, direct children of `.view-actions`: the
+   left sidebar's "Expand" (`.view-header-left`) and other header buttons stay as in Obsidian. */
+.workspace-leaf-content[data-type='buba-grid'] .view-actions {
+  gap: 0;
+}
+
+.is-phone .workspace-leaf-content[data-type='buba-grid'] .view-actions > .view-action {
+  width: auto;
+}
+
+/* View menu section headers, one per section (toolbar.ts, `menuLabel`): small, the same size as the "Palette"
+   label of the color window (color/picker.css); Obsidian's header (`.menu-item.is-label`) is
+   `--font-ui-medium`, larger than the items. The size is set on the row, not the text, so the header row is
+   shorter too. The color is the quiet one of the "Buba" label: `--buba-menu-quiet` (menu-title.css). */
+.menu-item.is-label:has(> .menu-item-title > .buba-menu-label) {
+  color: var(--buba-menu-quiet);
+  font-size: var(--font-ui-smaller);
+}
+
+/* Item icons start at the left edge of the text of items without an icon. In Obsidian an empty icon
+   (`.menu-item-icon` without svg) has zero width but keeps the row gap `--size-4-2` (`.menu-item { gap }`,
+   Obsidian 1.14), so an icon-less item's text sits one gap right of where icons start; the icon is shifted by
+   that gap, on desktop and phone. Only in sections with our header: Obsidian's items and our items in its
+   sections (⋮, file menu) do not move. Obsidian's menu is as wide as its widest item, so it widens itself and
+   items are not cut. */
+.menu-group:has(> .menu-item.is-label > .menu-item-title > .buba-menu-label)
+  > .menu-item
+  > .menu-item-icon:first-child:not(:empty) {
+  margin-inline-start: var(--size-4-2);
+}
+
+/* "Tile size" window (toolbar.ts, paneMenu): the slider fills the window width; at Obsidian's 100 px slider
+   width a step of 10 within 80–400 is 3 px, too little for a finger. */
+.buba-grid-size {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+
+.buba-grid-size .slider {
+  flex: 1 1 auto;
+}

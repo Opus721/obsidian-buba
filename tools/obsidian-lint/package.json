@@ -1,0 +1,15 @@
+{
+  "name": "buba-obsidian-lint",
+  "private": true,
+  "description": "Obsidian's plugin linter (eslint-plugin-obsidianmd), the same check the community directory runs on submissions. Separate from the plugin's dependencies: it needs TypeScript 5, the plugin builds with TypeScript 7.",
+  "type": "module",
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@eslint/json": "0.14.0",
+    "eslint": "9.39.5",
+    "eslint-plugin-obsidianmd": "0.4.2",
+    "obsidian": "1.12.3",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.0"
+  }
+}

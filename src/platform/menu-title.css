@@ -1,0 +1,68 @@
+/* "Buba" label on our items in mixed menus (menu-title.ts): at the right edge of the item, small and quieter
+   than the item text. The "Buba label in menus" toggle on Buba's settings page sets `buba-menu-own-off` on
+   `body` (src/platform/tree-look.ts) to hide it. The word lives here, not in the text, so the item title
+   stays clean for native menus and search. Sizes are in one variables rule. The label and the view menu's
+   section headers (grid/toolbar.css) use `--buba-menu-quiet`: on desktop `--text-faint`, like the file
+   panel's "Not on any canvas" (`.buba-storage-note`); in the light theme `--text-faint` (#ababab on the
+   #f6f6f6 menu, 2.1:1) is unreadable, so it takes the next step of Obsidian's palette, `--color-base-60`
+   (#707070, 4.6:1, at least 4.5:1). On phones groups are separated by cards and the menu sheet is
+   translucent, so the color stays `--text-muted`. */
+.menu {
+  --buba-menu-own-size: 10px;
+  --buba-menu-own-line: 12px;
+  --buba-menu-quiet: var(--text-muted);
+}
+
+body:not(.is-phone) .menu {
+  --buba-menu-quiet: var(--text-faint);
+}
+
+body.theme-light:not(.is-phone) .menu {
+  --buba-menu-quiet: var(--color-base-60, var(--text-muted));
+}
+
+.menu-item-title:has(> .buba-menu-own) {
+  display: flex;
+  align-items: baseline;
+}
+
+/* The item text yields to the label: it shrinks and ends in an ellipsis, like Obsidian's item title, so the
+   "Buba" label stays whole (on phones "Rename with extension…" used to cut it down to "Bu"). */
+.buba-menu-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Obsidian's checkmark (`.menu-item-icon.mod-checked`, icon `--icon-s`) follows the item title after the row
+   gap `--size-4-2` and narrows the title, so a checked item's label shifted left. Items without the checkmark
+   reserve its space, so the label's right edge is the same on every item. Only in menus that have a
+   checkmark: in menus without one (file, folder) the space stayed empty and took 26px from the text. */
+.menu:has(.menu-item.mod-checked) .menu-item:not(.mod-checked) > .menu-item-title:has(> .buba-menu-own) {
+  margin-inline-end: calc(var(--icon-s) + var(--size-4-2));
+}
+
+/* Phone: with 16px item text and a 10px label, baseline alignment puts the label's middle 2.5px below the
+   row's middle (measured), so center it on the row. On desktop baseline alignment is exact, so leave it. */
+.is-phone .menu-item-title:has(> .buba-menu-own) {
+  align-items: center;
+}
+
+.buba-menu-own {
+  flex: none;
+  margin-inline-start: auto;
+  padding-inline-start: var(--size-4-4);
+  color: var(--buba-menu-quiet);
+  font-size: var(--buba-menu-own-size);
+  line-height: var(--buba-menu-own-line);
+  letter-spacing: 0.02em;
+}
+
+.buba-menu-own::after {
+  content: 'Buba';
+}
+
+.buba-menu-own-off .buba-menu-own {
+  display: none;
+}

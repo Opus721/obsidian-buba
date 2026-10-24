@@ -1,0 +1,372 @@
+/* Full-window viewer: a Modal without border, radius, padding or empty header; the original moves across the
+   whole window. Obsidian's close button stays on top. Only Obsidian classes and variables. */
+.modal.buba-viewer {
+  --dialog-width: 100%;
+  --dialog-max-width: 100%;
+  --dialog-max-height: 100%;
+  --modal-radius: 0;
+  --modal-border-width: 0;
+  height: 100%;
+  padding: 0;
+}
+
+/* Phone and tablet: the modal fills the screen, while Obsidian's close button and the original stay in the
+   iPhone and iPad safe area: touches under the status bar go to the system, and the home indicator sits at
+   the bottom. The inset is a transparent border as wide as Obsidian's `--safe-area-inset-*` variables: the
+   close button is absolutely positioned from the border's inner edge, so `padding` would not move it; the
+   modal background shows under the border, and the border counts toward the modal height. Tablets get it too,
+   since on iPad the close button went under the clock. Touches on the border belong only to the edge gesture
+   (viewer.ts, `#touchedAt`). */
+.is-mobile .modal.buba-viewer {
+  box-sizing: border-box;
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--safe-area-inset-top) var(--safe-area-inset-right) var(--safe-area-inset-bottom)
+    var(--safe-area-inset-left);
+}
+
+/* Phone: Obsidian's close button sits where the Settings modal's does: `--safe-area-inset-top` from the top
+   and `max(--size-4-3, side insets)` from the right (Obsidian 1.13.7, `.is-phone
+   .modal.mod-settings.mod-sidebar-layout .modal-header-button`). It is measured from the inner edge of the
+   border above, so the top is 0 and the right border is subtracted. Both class names match Obsidian's rules;
+   if the name changes again, the button stays at the border position and clickable. */
+.is-phone .modal.buba-viewer > .modal-header-button,
+.is-phone .modal.buba-viewer > .modal-close-button {
+  top: 0;
+  inset-inline-end: calc(
+    max(var(--size-4-3), var(--safe-area-inset-left), var(--safe-area-inset-right)) -
+      var(--safe-area-inset-right)
+  );
+}
+
+/* Tablet: Obsidian's close button sits where Obsidian's image lightbox puts it on iPad:
+   `max(--safe-area-inset-top, --size-4-3)` from the top of the screen and `--size-4-3` from the right
+   (Obsidian 1.13.7, `.is-mobile .lightbox .modal-close-button`). It is measured from the inner edge of the
+   border, so the top border is subtracted: in a Stage Manager window without a status bar the button stays
+   `--size-4-3` from the top instead of touching it. The right side is as on phones: iPad has no side insets,
+   so this is the same `--size-4-3`. */
+.is-tablet .modal.buba-viewer > .modal-header-button,
+.is-tablet .modal.buba-viewer > .modal-close-button {
+  top: calc(max(var(--safe-area-inset-top), var(--size-4-3)) - var(--safe-area-inset-top));
+  inset-inline-end: calc(
+    max(var(--size-4-3), var(--safe-area-inset-left), var(--safe-area-inset-right)) -
+      var(--safe-area-inset-right)
+  );
+}
+
+.buba-viewer .modal-header {
+  display: none;
+}
+
+.buba-viewer .modal-content {
+  position: relative;
+  overflow: hidden;
+}
+
+.buba-viewer-media {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  max-height: none;
+}
+
+/* "Fit to screen" button with the `scan` icon (viewer.ts). This rule places it on tablets; desktop and phone
+   get the round buttons below. */
+.buba-viewer-fit {
+  position: absolute;
+  top: var(--size-4-3);
+  inset-inline-start: var(--size-4-3);
+  z-index: 1;
+  opacity: calc(var(--buba-viewer-fade, 1) * var(--buba-viewer-controls, 1));
+}
+
+.is-mobile .buba-viewer-fit {
+  top: calc(max(var(--safe-area-inset-top), var(--size-4-3)) - var(--safe-area-inset-top));
+  inset-inline-start: calc(
+    max(var(--size-4-3), var(--safe-area-inset-left), var(--safe-area-inset-right)) -
+      var(--safe-area-inset-left)
+  );
+  min-height: var(--touch-size-m, var(--size-4-12));
+}
+
+.is-phone .buba-viewer-fit {
+  top: 0;
+}
+
+/* Round viewer buttons on desktop: Obsidian's close button and "Fit to screen" are round icon buttons without
+   border, shadow or edge. The close button is top right, its circle centered over Obsidian's modal close
+   button; "Fit" is top left, mirrored. Fill and blur match the round phone buttons below (a translucent fill
+   with blur under it, no outline): the tone of the round tag "+" (`--buba-add-bg` of the text color over the
+   modal background), opaque at `--buba-view-fill`, over Obsidian's glass blur (`--raised-blur`). A plain 6%
+   grey circle without blur vanished over a zoomed image: on black in the light theme the circle was 1.01:1
+   and the icon 2.5:1, on white in the dark theme the icon was 1.8:1. The icon uses the text color, unchanged
+   on hover (as on phone buttons; one icon color). The icon is offset from the edge by half the difference
+   rounded down. `body:not(.is-mobile)` rather than `:not(.is-mobile)`, which would match any ancestor of the
+   modal and fire on phones. Numbers are this rule's variables: `--buba-view-size` is the circle,
+   `--buba-view-icon` the icon, `--buba-view-fill` the circle opacity (the same value as the phone's
+   `--buba-nav-fill`, which lives on `body.is-phone`), `--buba-view-top` and `--buba-view-side` the offsets
+   from the top and the side. Specificity (0,4,1) beats Obsidian's buttons (`button:not(.clickable-icon)`,
+   `.clickable-icon:hover`). The keyboard focus ring is Obsidian's. */
+body:not(.is-mobile) .modal.buba-viewer {
+  --buba-view-size: 32px;
+  --buba-view-icon: 16px;
+  --buba-view-fill: 80%;
+  --buba-view-top: 3px;
+  --buba-view-side: 6px;
+}
+
+body:not(.is-mobile) .modal.buba-viewer > .modal-header-button,
+body:not(.is-mobile) .modal.buba-viewer > .modal-close-button,
+body:not(.is-mobile) .modal.buba-viewer > .buba-viewer-fit {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  top: var(--buba-view-top);
+  width: var(--buba-view-size);
+  height: var(--buba-view-size);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--text-normal) var(--buba-add-bg), var(--modal-background)) var(--buba-view-fill),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--raised-blur);
+  backdrop-filter: var(--raised-blur);
+  color: var(--text-normal);
+  --icon-size: var(--buba-view-icon);
+}
+
+body:not(.is-mobile) .modal.buba-viewer > .modal-header-button,
+body:not(.is-mobile) .modal.buba-viewer > .modal-close-button {
+  inset-inline-end: var(--buba-view-side);
+}
+
+body:not(.is-mobile) .modal.buba-viewer > .buba-viewer-fit {
+  inset-inline-start: var(--buba-view-side);
+}
+
+body:not(.is-mobile) .modal.buba-viewer > .modal-header-button:hover,
+body:not(.is-mobile) .modal.buba-viewer > .modal-close-button:hover,
+body:not(.is-mobile) .modal.buba-viewer > .buba-viewer-fit:hover {
+  border: 0;
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--text-normal) var(--buba-add-bg), var(--modal-background)) var(--buba-view-fill),
+    transparent
+  );
+  color: var(--text-normal);
+}
+
+body:not(.is-mobile) .modal.buba-viewer > .modal-header-button:not(:focus-visible),
+body:not(.is-mobile) .modal.buba-viewer > .modal-close-button:not(:focus-visible),
+body:not(.is-mobile) .modal.buba-viewer > .buba-viewer-fit:not(:focus-visible) {
+  box-shadow: none;
+}
+
+body:not(.is-mobile) .modal.buba-viewer > .modal-header-button::after,
+body:not(.is-mobile) .modal.buba-viewer > .modal-close-button::after,
+body:not(.is-mobile) .modal.buba-viewer > .buba-viewer-fit::after {
+  display: none;
+}
+
+body:not(.is-mobile) .modal.buba-viewer > .modal-header-button > svg,
+body:not(.is-mobile) .modal.buba-viewer > .modal-close-button > svg,
+body:not(.is-mobile) .modal.buba-viewer > .buba-viewer-fit > svg {
+  flex: none;
+  margin-top: round(down, calc((var(--buba-view-size) - var(--buba-view-icon)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-view-size) - var(--buba-view-icon)) / 2), 1px);
+}
+
+.buba-viewer-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-4-2);
+}
+
+.buba-viewer-empty-note {
+  color: var(--text-muted);
+}
+
+/* File type icon above the name: the same icon as on a tile without a preview and in the file panel, at the
+   tile icon size (tiles.css, `.buba-tile-thumb`: `--icon-xl`). Color matches the "No preview" text below it
+   (`--text-muted`): the tile's pale `--text-faint` on the white modal background of the light theme is 2.1:1,
+   nearly invisible. */
+.buba-viewer-empty-icon {
+  display: flex;
+  color: var(--text-muted);
+  --icon-size: var(--icon-xl);
+  --icon-stroke: var(--icon-xl-stroke-width);
+}
+
+/* Swipe down on touch, like Obsidian's native image viewer: the image follows the finger while the modal
+   background and close button fade. The background share and close button opacity are our own variables set
+   by viewer.ts; without them the modal looks like Obsidian's: background `--modal-background`, close button
+   fully visible. The close button is targeted under both class names (Obsidian renamed it), with no opacity
+   transition: it follows the finger, as in Obsidian's swipe. */
+.modal.buba-viewer {
+  background-color: color-mix(
+    in srgb,
+    var(--modal-background) var(--buba-viewer-backdrop, 100%),
+    transparent
+  );
+}
+
+.modal.buba-viewer > .modal-header-button,
+.modal.buba-viewer > .modal-close-button {
+  opacity: calc(var(--buba-viewer-fade, 1) * var(--buba-viewer-controls, 1));
+  transition: none;
+}
+
+/* A single tap on phones hides the close button, "Fit to screen" and the arrows (arrows are
+   `.modal-header-button` too), like iPhone Photos: viewer.ts drives the visible share
+   `--buba-viewer-controls` per frame, like the swipe, so there is no opacity transition here either and
+   the close button follows a swipe at once. Hidden and fading buttons are not clickable: a tap in their
+   place goes to the stage and brings them back. Without the variable and class (desktop, tablet) nothing
+   changes. */
+.modal.buba-viewer.is-controls-hidden > .modal-header-button,
+.modal.buba-viewer.is-controls-hidden > .modal-close-button,
+.modal.buba-viewer.is-controls-hidden > .buba-viewer-fit {
+  pointer-events: none;
+}
+
+/* Touches on the modal go to the modal's gestures, not the browser, which would otherwise take the finger and
+   send pointercancel. The whole modal, not just the stage: on phones a touch at the very edge of the screen
+   lands in the safe area border. On every platform, like Obsidian's `.lightbox-media`: on a touchscreen
+   desktop a pinch would otherwise end in a cancel. */
+.modal.buba-viewer {
+  touch-action: none;
+}
+
+/* The stage and the image too, like Obsidian's `.lightbox-media`: the stage has `overflow: hidden`, and the
+   browser checks a touch pan against `touch-action` only up to the nearest scroll container (Pointer Events
+   3, § 8.2), so the modal's rule above the stage may not reach it and iPhone takes the finger
+   (`pointercancel`). */
+.modal.buba-viewer .modal-content,
+.modal.buba-viewer .buba-viewer-media {
+  touch-action: none;
+}
+
+/* Round viewer buttons on phones: Obsidian's close button, "Fit to screen" and the "previous" and "next"
+   arrows (Obsidian's close button element is `modal-header-button mod-raised clickable-icon`): one round
+   button without border, shadow or iOS edge (`::after`), since Buba buttons have no outlines. The button
+   shows through a fill in the tone of the round tag "+" in the file panel (tags-rating.css): a share
+   `--buba-add-bg` of the text color over the modal background `--modal-background`, opaque at
+   `--buba-nav-fill`, over Obsidian's glass blur (`--raised-blur`): the blurred content shows faintly through
+   the circle, while the icon keeps at least 4.5:1 against the circle over both white and black images in both
+   themes (at Obsidian's 65% glass the icon on a white image in the dark theme was 3.3:1). An 18px icon in a
+   44px circle leaves an even difference, so the icon is exactly centered (19px sat 0.5px off up and left).
+   The numbers are variables of one rule on `body.is-phone`, because the round comment "Send" in the file
+   panel (comments.css) and the round close buttons of the color and type filter dialogs (picker.css,
+   type-filter.css) read them too, and the viewer rule does not reach the panel. `--buba-nav-size` is the
+   circle, `--buba-nav-icon` the icon, `--buba-nav-fill` the circle opacity, `--buba-nav-bg` the background of
+   the round close buttons in the color and type filter dialogs, `--buba-nav-side` the arrows' offset from the
+   side edge, like the close button (`--size-4-3`, with the safe area), `--buba-nav-y` the arrows' middle from
+   the stage top. The close button position (top 0, right 12) and "Fit" (top 0, left 12) are in the rules
+   above. iPad is unchanged: `.is-phone`, not `.is-mobile`. */
+body.is-phone {
+  --buba-nav-size: 44px;
+  --buba-nav-icon: 18px;
+  --buba-nav-fill: 80%;
+  --buba-nav-bg: color-mix(in srgb, var(--interactive-normal) 30%, transparent);
+  --buba-nav-side: var(--size-4-3);
+  --buba-nav-y: 50%;
+}
+
+.is-phone .modal.buba-viewer > .modal-header-button:not(.buba-viewer-nav),
+.is-phone .modal.buba-viewer > .modal-close-button:not(.buba-viewer-nav),
+.is-phone .modal.buba-viewer > .modal-header-button.buba-viewer-nav,
+.is-phone .modal.buba-viewer > .buba-viewer-fit {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: var(--buba-nav-size);
+  height: var(--buba-nav-size);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--text-normal) var(--buba-add-bg), var(--modal-background)) var(--buba-nav-fill),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--raised-blur);
+  backdrop-filter: var(--raised-blur);
+  --icon-size: var(--buba-nav-icon);
+}
+
+.is-phone .modal.buba-viewer > .modal-header-button:not(.buba-viewer-nav):not(:focus-visible),
+.is-phone .modal.buba-viewer > .modal-close-button:not(.buba-viewer-nav):not(:focus-visible),
+.is-phone .modal.buba-viewer > .modal-header-button.buba-viewer-nav:not(:focus-visible),
+.is-phone .modal.buba-viewer > .buba-viewer-fit:not(:focus-visible) {
+  box-shadow: none;
+}
+
+.is-phone .modal.buba-viewer > .modal-header-button:not(.buba-viewer-nav)::after,
+.is-phone .modal.buba-viewer > .modal-close-button:not(.buba-viewer-nav)::after,
+.is-phone .modal.buba-viewer > .modal-header-button.buba-viewer-nav::after,
+.is-phone .modal.buba-viewer > .buba-viewer-fit::after {
+  display: none;
+}
+
+.is-phone .modal.buba-viewer > .modal-header-button:not(.buba-viewer-nav) > svg,
+.is-phone .modal.buba-viewer > .modal-close-button:not(.buba-viewer-nav) > svg,
+.is-phone .modal.buba-viewer > .modal-header-button.buba-viewer-nav > svg,
+.is-phone .modal.buba-viewer > .buba-viewer-fit > svg {
+  flex: none;
+  margin-top: round(down, calc((var(--buba-nav-size) - var(--buba-nav-icon)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-nav-size) - var(--buba-nav-icon)) / 2), 1px);
+}
+
+/* Phone "Fit": icon color and stroke width as on Obsidian's phone close button (`.is-mobile
+   .modal-header-button`, app.css 1.14.4), so viewer button icons share one box and one stroke. */
+.is-phone .modal.buba-viewer > .buba-viewer-fit {
+  color: var(--text-normal);
+  --icon-stroke: var(--icon-l-stroke-width);
+}
+
+/* Arrows: the button middle at `--buba-nav-y`, the top rounded to whole pixels. */
+.is-phone .modal.buba-viewer > .modal-header-button.buba-viewer-nav {
+  top: round(calc(var(--buba-nav-y) - var(--buba-nav-size) / 2), 1px);
+}
+
+.is-phone .modal.buba-viewer > .modal-header-button.buba-viewer-nav.mod-prev {
+  inset-inline-start: calc(
+    max(var(--buba-nav-side), var(--safe-area-inset-left), var(--safe-area-inset-right)) -
+      var(--safe-area-inset-left)
+  );
+  inset-inline-end: auto;
+}
+
+.is-phone .modal.buba-viewer > .modal-header-button.buba-viewer-nav.mod-next {
+  inset-inline-end: calc(
+    max(var(--buba-nav-side), var(--safe-area-inset-left), var(--safe-area-inset-right)) -
+      var(--safe-area-inset-right)
+  );
+}
+
+/* Arrows only on phones: a viewer opened on a phone and then shown on an iPad widened to tablet layout hides
+   them, otherwise Obsidian's rule would put them where the close button is. */
+body:not(.is-phone) .modal.buba-viewer > .buba-viewer-nav {
+  display: none;
+}
+
+/* Phone: video fits into the stage below the close button, because iOS draws the player controls inside the
+   video and under the close button they collided. The close button sits at the stage top (`top: 0`, rule
+   above) and is `--touch-size-m` tall (Obsidian 1.13.7, `.is-phone .modal-close-button`), so its bottom is
+   that variable. The fallback is Obsidian's `--size-4-12` (48px): whether `--touch-size-m` exists in 1.12.3
+   (minAppVersion) is unverified, and without it the video would go under the close button. viewer.ts reads
+   the computed value; without the variable (desktop, tablet) video fills the stage. Images are not shifted
+   down this way. */
+.is-phone .modal.buba-viewer {
+  --buba-viewer-video-top: var(--touch-size-m, var(--size-4-12));
+}

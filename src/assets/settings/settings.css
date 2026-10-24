@@ -1,0 +1,9 @@
+/* Dropdowns on the Buba settings page are as wide as their longest option, whatever is selected. Obsidian
+   1.13+ fits a dropdown to the selected option (`resizeToFit` writes it into `--dropdown-fitted-width`), so a
+   short choice makes the field narrow and its open menu runs into the edge. `width: auto` is the native
+   `<select>` width, which follows the longest option. Scoped to our tab class, so Obsidian's own dropdowns
+   are untouched. On a phone Obsidian does not fit the width (the dropdown fills the row), so it keeps its
+   look there. */
+body:not(.is-phone) .buba-settings .setting-item-control select.dropdown {
+  width: auto;
+}

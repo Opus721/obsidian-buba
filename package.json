@@ -1,0 +1,31 @@
+{
+  "name": "buba",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Buba — asset manager for plain folders: a grid of previews, tags, rating and comments for any file.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "node tools/obsidian-lint/run.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@codemirror/view": "^6.38.6",
+    "@types/node": "^24.19.0",
+    "esbuild": "^0.28.2",
+    "obsidian": "^1.13.1",
+    "prettier": "^3.9.9",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@tanstack/virtual-core": "^3.17.11",
+    "idb": "^8.0.3"
+  }
+}

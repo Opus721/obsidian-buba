@@ -1,0 +1,14 @@
+/* Tiles on a phone: a long press opens Obsidian's file menu, not the WebKit "Save image" sheet, text
+   selection of the name or a native image drag. `cursor: pointer` makes the tile clickable for iOS WebKit:
+   without it a tap sends no `click` to an element that has no handler of its own (Safari Web Content Guide,
+   "Making Elements Clickable"). */
+.is-mobile .buba-tile {
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.is-mobile .buba-tile img {
+  -webkit-user-drag: none;
+}

@@ -1,0 +1,384 @@
+/* Color window (picker.ts): "Palette" is a fixed row of dots, then pinned, recent and a custom color. Sizes
+   are the `--buba-cw-*` variables of the two rules below (desktop; phone in `.is-phone`, an iPad gets desktop
+   values); other rules only read the variables, and any other literal numbers must be on the test allow-list
+   (checked by a test). A dot is the `::before` of its cell, whole pixels from the top left corner
+   (`--buba-cw-off` is half the difference of cell and dot, rounded down; a dot larger than its cell shifts
+   the row by the overhang), so dots, labels and title share one left edge. All borders and text baselines sit
+   on whole CSS px. The dot color is `--buba-color` in `style`, set after the pattern check (colorCss). Only a
+   color hard to see on the theme background gets a ring (the code sets `mod-low-contrast-<theme>`,
+   src/core/color/contrast.ts). */
+.buba-color-modal {
+  --buba-cw-swatch: 16px;
+  --buba-cw-cell: 16px;
+  --buba-cw-gap: 8px;
+  --buba-cw-row-pad: 0px;
+  --buba-cw-label-gap: 12px;
+  --buba-cw-group-gap: 24px;
+  --buba-cw-line: 30px;
+  --buba-cw-icon: 14px;
+  --buba-cw-btn-gap: 8px;
+  --buba-cw-picker-y: 6px;
+  --buba-cw-pad: 16px;
+  --buba-cw-radius: 10px;
+  --buba-cw-well-less: 2px;
+  --buba-win-x: 6px;
+  --buba-cw-off: round(down, calc((var(--buba-cw-cell) - var(--buba-cw-swatch)) / 2), 1px);
+  --buba-swatch-size: var(--buba-cw-swatch);
+  --buba-swatch-cell: var(--buba-cw-cell);
+}
+
+.is-phone .buba-color-modal {
+  --buba-cw-swatch: 20px;
+  --buba-cw-cell: 16px;
+  --buba-cw-gap: 12px;
+  --buba-cw-row-pad: 0px;
+  --buba-cw-label-gap: 12px;
+  --buba-cw-group-gap: 24px;
+  --buba-cw-line: 34px;
+  --buba-cw-icon: 14px;
+  --buba-cw-btn-gap: 8px;
+  --buba-cw-picker-y: 6px;
+  --buba-cw-pad: 16px;
+  --buba-cw-radius: 12px;
+  --buba-cw-well-less: 2px;
+  --buba-win-x: 12px;
+}
+
+/* Window: radius and padding override Obsidian's modal rule. On a phone the window is an Obsidian sheet
+   (`mod-lg`) and the padding is on the header and content. */
+.buba-color-modal.modal {
+  border-radius: var(--buba-cw-radius);
+  padding: var(--buba-cw-pad);
+}
+
+.is-phone .buba-color-modal.modal {
+  padding: 0;
+}
+
+.is-phone .buba-color-modal .buba-color-content {
+  padding: 0 var(--buba-cw-pad) var(--buba-cw-pad);
+}
+
+/* Desktop: the window is as wide as the "Palette" row; a long folder name in the title and "Recent" wrap
+   instead of widening it; the HEX field fits 9 characters. */
+body:not(.is-mobile) .buba-color-modal {
+  width: fit-content;
+  min-width: 0;
+}
+
+body:not(.is-mobile) .buba-color-modal .modal-header {
+  contain: inline-size;
+  padding-inline-end: calc(var(--buba-win-x) + var(--size-4-6));
+}
+
+body:not(.is-mobile) .buba-color-modal .buba-color-rows .buba-color-row {
+  contain: inline-size;
+}
+
+body:not(.is-mobile) .buba-color-modal .buba-color-group.mod-palette > .buba-color-row {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--buba-swatch-cell);
+}
+
+body:not(.is-mobile) .buba-color-modal .buba-color-custom input[type='text'] {
+  width: 9ch;
+  flex: 1 1 9ch;
+  min-width: 9ch;
+}
+
+/* Header: the gap from the title to "Palette" is the group gap. */
+.buba-color-modal .modal-header {
+  margin-bottom: var(--buba-cw-group-gap);
+}
+
+/* Text lines have whole-pixel heights; the left edge is the dots' edge. */
+.buba-color-modal .modal-title,
+.buba-color-label,
+.buba-color-hint {
+  line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  padding-inline-start: calc(var(--buba-cw-row-pad) + max(0px, var(--buba-cw-off)));
+}
+
+/* Phone: the title is centered across the header width (Obsidian's `.is-phone .modal-title` has
+   `max-width: 70vw` and `auto` margins: without lifting the limit the 273 px box hugs the left and the text
+   sits left of center). The text does not run under the close button: padding on both sides covers its circle
+   beyond the header padding (a long name ends in an ellipsis before the button, as in Obsidian). The header
+   matches the "File type" window (padding 24 / 20 / 16, and 16 to the content). */
+.is-phone .buba-color-modal .modal-title {
+  flex: auto;
+  min-width: 0;
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: calc(var(--buba-nav-size) + var(--buba-win-x) - var(--size-4-5));
+}
+
+.is-phone .buba-color-modal.modal > .modal-header {
+  min-height: 0;
+  padding: var(--size-4-6) var(--size-4-5) var(--size-4-4);
+  align-items: flex-end;
+  margin-bottom: var(--size-4-4);
+}
+
+/* Room for the selection ring: the window scrolls its content and would clip the ring of the top row; the
+   content is raised by the same amount, so the rows stay in place. */
+.buba-color-modal .modal-content.buba-color-content {
+  padding-top: calc(var(--size-2-2) + max(0px, -1 * var(--buba-cw-off)));
+  margin-top: calc(-1 * (var(--size-2-2) + max(0px, -1 * var(--buba-cw-off))));
+}
+
+.buba-color-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--buba-cw-group-gap);
+}
+
+/* Pinned and recent are redrawn in their own node; its groups sit directly in the window column with the same
+   gap. */
+.buba-color-rows {
+  display: contents;
+}
+
+.buba-color-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--buba-cw-label-gap);
+}
+
+/* Group label: small muted text right next to its row, without the setting row padding. */
+.buba-color-label,
+.buba-color-hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.buba-color-hint:empty {
+  display: none;
+}
+
+/* Dots in a grid of equal cells, so wrapping on a narrow phone stays even. A dot larger than its cell gets
+   row padding for the overhang on all sides, so the top row is not clipped and a dot does not overlap the
+   label. */
+.buba-color-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, var(--buba-swatch-cell));
+  gap: var(--buba-cw-gap);
+  padding-block: calc(var(--buba-cw-row-pad) + max(0px, -1 * var(--buba-cw-off)));
+  padding-inline-start: calc(var(--buba-cw-row-pad) + max(0px, -1 * var(--buba-cw-off)));
+  padding-inline-end: var(--buba-cw-row-pad);
+}
+
+.buba-color-swatch {
+  --buba-color: transparent;
+  --buba-edge: 0 0 transparent;
+  --buba-ring: var(--buba-color);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: var(--buba-swatch-cell);
+  height: var(--buba-swatch-cell);
+  color: var(--text-muted);
+  cursor: var(--cursor);
+}
+
+.buba-color-swatch::before {
+  content: '';
+  flex: none;
+  width: var(--buba-swatch-size);
+  height: var(--buba-swatch-size);
+  margin-top: var(--buba-cw-off);
+  margin-left: var(--buba-cw-off);
+  border-radius: var(--swatch-radius);
+  background-color: var(--buba-color);
+  box-shadow: var(--buba-edge);
+}
+
+/* A color hard to see on the theme background gets Obsidian's thin border, and its selection ring uses the
+   focus border instead of its own color. */
+.theme-light .buba-color-swatch.mod-low-contrast-light,
+.theme-dark .buba-color-swatch.mod-low-contrast-dark,
+.buba-color-swatch.mod-none {
+  --buba-edge: inset 0 0 0 var(--border-width) var(--background-modifier-border);
+  --buba-ring: var(--background-modifier-border-focus);
+}
+
+/* The selected color gets a ring with a gap of window background, like the current color in Obsidian's canvas
+   menu. The gap is `--modal-background`: on iPhone the window background is `--background-secondary`, and
+   `--background-primary` (black in the dark theme) would show as a band. */
+.buba-color-swatch.is-active::before {
+  box-shadow:
+    var(--buba-edge),
+    0 0 0 var(--size-2-1) var(--modal-background),
+    0 0 0 var(--size-2-2) var(--buba-ring);
+}
+
+/* "No color" is the `ban` icon, `--size-4-1` larger than a dot, equally on each side. */
+.buba-color-swatch.mod-none .svg-icon {
+  position: absolute;
+  top: calc(var(--buba-cw-off) - var(--size-2-1));
+  left: calc(var(--buba-cw-off) - var(--size-2-1));
+  --icon-size: calc(var(--buba-swatch-size) + var(--size-4-1));
+}
+
+@media (hover: hover) {
+  .buba-color-swatch:not(.is-active):hover::before {
+    box-shadow:
+      var(--buba-edge),
+      0 0 0 var(--size-2-1) var(--background-modifier-border-hover);
+  }
+}
+
+.buba-color-swatch:focus-visible::before {
+  box-shadow:
+    var(--buba-edge),
+    0 0 0 var(--size-2-1) var(--background-modifier-border-focus);
+}
+
+/* "Custom color" is one row of height `--buba-cw-line`: dot, "HEX", field, "Copy", "Pin"; each sits whole
+   pixels below the row top. Nothing shrinks except the field. */
+.buba-color-custom {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--buba-cw-gap);
+  padding-inline: var(--buba-cw-row-pad);
+}
+
+.buba-color-custom .buba-color-well,
+.buba-color-custom .buba-color-hex,
+.buba-color-custom .buba-color-round {
+  flex: none;
+}
+
+/* The custom color dot is our own circle; Obsidian's color input lies on top, transparent, as in Obsidian's
+   canvas color menu (`.canvas-color-picker-item`), so its 26×22 box clips nothing. The input is shifted down
+   so the color picker opens below the dot. The dot is `--buba-cw-well-less` smaller than the buttons and
+   centered on them. */
+.buba-color-custom .buba-color-well {
+  position: relative;
+  display: block;
+  width: calc(var(--buba-cw-line) - var(--buba-cw-well-less));
+  height: calc(var(--buba-cw-line) - var(--buba-cw-well-less));
+  margin-top: round(down, calc(var(--buba-cw-well-less) / 2), 1px);
+  margin-inline-end: var(--buba-cw-well-less);
+  border-radius: 50%;
+  background-color: var(--buba-color);
+  box-shadow: inset 0 0 0 var(--border-width) color-mix(in oklch, var(--mono-100) 15%, transparent);
+  cursor: var(--cursor);
+}
+
+.buba-color-custom .buba-color-well:focus-within {
+  box-shadow:
+    inset 0 0 0 var(--border-width) color-mix(in oklch, var(--mono-100) 15%, transparent),
+    0 0 0 var(--input-border-width-focus) var(--background-modifier-border-focus);
+}
+
+.buba-color-custom .buba-color-well > input[type='color'] {
+  position: absolute;
+  inset: auto 0;
+  top: var(--buba-cw-picker-y);
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.buba-color-custom .buba-color-hex {
+  width: calc-size(max-content, round(up, size, 1px));
+  font-size: round(var(--font-ui-smaller), 1px);
+  line-height: var(--buba-cw-line);
+  color: var(--text-muted);
+}
+
+/* Borderless HEX field: while typing it shows Obsidian's thin field border, without focus ring or background;
+   the text stays where it would be without a field (the field extends left by its own padding). */
+.buba-color-custom input[type='text'] {
+  flex: auto;
+  min-width: 0;
+  height: var(--buba-cw-line);
+  padding-block: 0;
+  padding-inline: min(var(--size-4-3), round(down, calc(var(--buba-cw-gap) / 2), 1px));
+  margin-inline-start: calc(-1 * min(var(--size-4-3), round(down, calc(var(--buba-cw-gap) / 2), 1px)));
+  border: var(--border-width) solid transparent;
+  border-radius: var(--input-radius);
+  background-color: transparent;
+  font-family: var(--font-monospace);
+}
+
+.buba-color-custom input[type='text']:hover {
+  border-color: transparent;
+  background-color: transparent;
+}
+
+.buba-color-custom input[type='text']:focus,
+.buba-color-custom input[type='text']:focus-visible {
+  border-color: var(--background-modifier-border-hover);
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* "Copy" and "Pin" are small round filled Buba icon buttons (src/platform/icon-button.css): color, fill and
+   disabled look are there; the size is here. The icon sits half the difference from the edge, rounded down.
+   */
+.buba-color-custom .buba-color-round {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: var(--buba-cw-line);
+  height: var(--buba-cw-line);
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  --icon-size: var(--buba-cw-icon);
+}
+
+.buba-color-custom .buba-color-round > svg {
+  flex: none;
+  width: var(--buba-cw-icon);
+  height: var(--buba-cw-icon);
+  margin-top: round(down, calc((var(--buba-cw-line) - var(--buba-cw-icon)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-cw-line) - var(--buba-cw-icon)) / 2), 1px);
+}
+
+.buba-color-custom .buba-color-round + .buba-color-round {
+  margin-inline-start: calc(var(--buba-cw-btn-gap) - var(--buba-cw-gap));
+}
+
+/* The close button has one offset from top and right, as in the "File type" window. On a phone it is the same
+   round button as in the viewer (`--buba-nav-*`, viewer.css): no outline, shadow or iOS button edge. */
+.buba-color-modal.modal > .modal-header-button {
+  top: var(--buba-win-x);
+  inset-inline-end: var(--buba-win-x);
+}
+
+.is-phone .buba-color-modal.modal > .modal-header-button {
+  box-sizing: border-box;
+  width: var(--buba-nav-size);
+  height: var(--buba-nav-size);
+  padding: 0;
+  border: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  background: var(--buba-nav-bg);
+  color: var(--icon-color);
+}
+
+.is-phone .buba-color-modal.modal > .modal-header-button:not(:focus-visible) {
+  box-shadow: none;
+}
+
+.is-phone .buba-color-modal.modal > .modal-header-button::after {
+  display: none;
+}
+
+.is-phone .buba-color-modal.modal > .modal-header-button > svg {
+  flex: none;
+  width: var(--buba-nav-icon);
+  height: var(--buba-nav-icon);
+  margin-top: round(down, calc((var(--buba-nav-size) - var(--buba-nav-icon)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-nav-size) - var(--buba-nav-icon)) / 2), 1px);
+}

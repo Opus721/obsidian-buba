@@ -1,0 +1,95 @@
+/* Row of the T tag dialog (picker.ts): Obsidian's suggestion classes (`suggestion-icon`,
+   `suggestion-content`, `suggestion-aux`, `suggestion-flair`), with only our sizes on top. The dot sits apart
+   from the name as in the "All tags" tree; the group on the right has the name's font size, muted; the count
+   is a three-digit column so the group does not jump; with "Tag name in dot color" the name and group take
+   their color. Styling uses Obsidian variables.
+
+   Dot cell and gap to the name match the tree: `--buba-tag-cell` (tag-list.css), `--buba-tree-gap`
+   (tree.css). Tree variables are declared on `.buba-tree` / `.buba-tag-tree` and do not reach the dialog, so
+   these are local copies with the same values. The dot has its own size (`--size-4-2`, dot.css): dot edge to
+   name is 11px on desktop and 13px on phones, the same as in the tree.
+
+   The dot aligns to the first line of the name, like the tree's circle (tag-list.css); with a two-line name
+   it used to sit in the middle. The cell is one first line tall at the top of the row, and the dot is offset
+   from the cell top by half the difference, rounded down. The name line has an integer height
+   (`--buba-picker-line`; Obsidian's 1em × 1.3 is fractional), like the tree's `--buba-tree-line`;
+   `--buba-picker-text-y` shifts the name up with the same numbers as the tree's `--buba-tag-text-y`
+   (tree.css): the integer line drops glyphs by a pixel and the shift lifts them 1px above where they were. */
+.buba-tag-picker-item {
+  --buba-picker-cell: 14px;
+  --buba-picker-gap: 8px;
+  --buba-picker-dot: var(--size-4-2);
+  --buba-picker-line: round(calc(1em * var(--line-height-tight)), 1px);
+  --buba-picker-text-y: -1px;
+}
+
+.is-phone .buba-tag-picker-item {
+  --buba-picker-cell: 18px;
+  --buba-picker-text-y: -2px;
+}
+
+.suggestion-item.mod-complex.buba-tag-picker-item .suggestion-icon {
+  width: var(--buba-picker-cell);
+  height: var(--buba-picker-line);
+  margin-inline-end: var(--buba-picker-gap);
+  align-self: flex-start;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+/* Dot centered horizontally in the cell and on the first line vertically; the dot's own margin (dot.css) is
+   not needed here. */
+.buba-tag-picker-item .suggestion-icon > .buba-color-dot {
+  margin: 0;
+  margin-top: round(down, calc((var(--buba-picker-line) - var(--buba-picker-dot)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-picker-cell) - var(--buba-picker-dot)) / 2), 1px);
+}
+
+.buba-tag-picker-item .suggestion-title {
+  line-height: var(--buba-picker-line);
+  translate: 0 var(--buba-picker-text-y);
+}
+
+/* Group and count on the right align to the first line of the name, like the tree's count (tag-list.css): by
+   the line's baseline, not its middle (Obsidian's `.suggestion-item.mod-complex .suggestion-aux` has
+   `align-self: center` with a heavier selector), on a line of the same height and with the same upward shift
+   as the name. Everything before and after the text aligns to its first line. */
+.suggestion-item.mod-complex.buba-tag-picker-item .suggestion-aux {
+  align-self: baseline;
+  line-height: var(--buba-picker-line);
+  translate: 0 var(--buba-picker-text-y);
+}
+
+/* Group at the name's size, muted: Obsidian 1.14.4 already does this, the rule pins it. */
+.buba-tag-picker-item .buba-tag-picker-group {
+  font-size: inherit;
+  color: var(--text-muted);
+}
+
+/* Count as a column of three equal-width digits, right-aligned, like the tree's count (tag-list.css).
+   Obsidian's flair is `display: flex`, so `justify-content` moves the text right; `text-align` covers a
+   non-flex row. */
+.buba-tag-picker-item .buba-tag-picker-count {
+  min-width: round(up, 3ch, 1px);
+  justify-content: flex-end;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Tag name in dot color": the same `body` class as the tree (src/platform/tree-look.ts) colors the tag name
+   and group; a color hard to see on the theme background (`mod-low-contrast-<theme>`) stays default, as in
+   the tree (tag-list.css). */
+body.theme-light.buba-tree-name-tag
+  .suggestion-item.buba-tag-picker-item.mod-tag-color:not(.mod-low-contrast-light)
+  .suggestion-title,
+body.theme-dark.buba-tree-name-tag
+  .suggestion-item.buba-tag-picker-item.mod-tag-color:not(.mod-low-contrast-dark)
+  .suggestion-title,
+body.theme-light.buba-tree-name-tag
+  .buba-tag-picker-item
+  .buba-tag-picker-group.mod-tag-color:not(.mod-low-contrast-light),
+body.theme-dark.buba-tree-name-tag
+  .buba-tag-picker-item
+  .buba-tag-picker-group.mod-tag-color:not(.mod-low-contrast-dark) {
+  color: var(--buba-color);
+}
