@@ -2,6 +2,19 @@
 
 What changed in each release of Buba, in plain words. The newest release is at the top.
 
+## 1.0.1
+
+Changes asked for by the Obsidian community review. Buba looks and works as before.
+
+- The release is now built on GitHub straight from this source and signed there, so anyone can check that the
+  released `main.js` is what the source builds.
+- A file that could not be added in full goes to the trash your "Deleted files" setting names, instead of being
+  deleted outright.
+- The code follows the current review rules: new elements come from Obsidian's helpers, timers and frames from the
+  window, and delete buttons use Obsidian's current red-button style.
+- Lighter styles: four style rules that made Obsidian recheck the whole window are now plain classes.
+- New screenshots: the folder tree with folder colours, and a generation passport.
+
 ## 1.0.0
 
 First public release. Buba turns the folders of your vault into a visual asset library: you see every file as a

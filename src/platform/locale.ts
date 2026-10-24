@@ -34,7 +34,7 @@ export const DEBUG_LANGUAGE_KEY = 'buba-debug-language';
 export function applyObsidianLanguage(): UiLanguage {
   let debug: string | null = null;
   try {
-    debug = globalThis.localStorage?.getItem(DEBUG_LANGUAGE_KEY) ?? null;
+    debug = window.localStorage?.getItem(DEBUG_LANGUAGE_KEY) ?? null;
   } catch {
     debug = null;
   }

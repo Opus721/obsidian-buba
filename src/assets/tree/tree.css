@@ -145,7 +145,7 @@
   translate: 0 var(--buba-tree-text-y);
 }
 
-.buba-tree .tree-item-self:has(> .buba-tree-icon > svg.lucide-plus) > .tree-item-inner {
+.buba-tree .tree-item-self.buba-tree-new > .tree-item-inner {
   translate: 0 var(--buba-tree-new-text-y);
 }
 

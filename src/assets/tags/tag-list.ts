@@ -558,7 +558,7 @@ function drawNewTag(listEl: HTMLElement, context: ListContext): void {
   const self = listEl
     .createDiv({ cls: 'tree-item buba-tag-new' })
     .createDiv({ cls: 'tree-item-self is-clickable', attr: { role: 'button' } });
-  const cell = self.createDiv({ cls: 'buba-tag-cell', attr: { 'aria-hidden': 'true' } });
+  const cell = self.createDiv({ cls: 'buba-tag-cell mod-new', attr: { 'aria-hidden': 'true' } });
   setIcon(cell, 'plus');
   self.createDiv({ cls: 'tree-item-inner', text: t('newTag') });
   self.addEventListener('click', () => {

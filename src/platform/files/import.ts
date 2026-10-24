@@ -180,8 +180,9 @@ async function readSlice(blob: Blob, start: number, end: number): Promise<ArrayB
 }
 
 /**
- * Appends the rest of a `Blob` to a just-created file in `CHUNK_BYTES` chunks. On failure the partial file is
- * removed with `vault.delete` (it is ours, created by this write) and the refusal states the reason.
+ * Appends the rest of a `Blob` to a just-created file in `CHUNK_BYTES` chunks. On failure the partial file (ours,
+ * created by this write) goes where the user's "Deleted files" setting says, `fileManager.trashFile`, and the
+ * refusal states the reason.
  */
 async function appendRest(app: App, file: TFile, blob: Blob): Promise<void> {
   try {
@@ -193,7 +194,7 @@ async function appendRest(app: App, file: TFile, blob: Blob): Promise<void> {
     const reason =
       error instanceof Refused ? error.message : t('importNotWritten', { error: message(error) });
     try {
-      await app.vault.delete(file);
+      await app.fileManager.trashFile(file);
     } catch (removal) {
       throw new Refused(t('importPartialKept', { reason, path: file.path, error: message(removal) }));
     }
@@ -215,10 +216,10 @@ function statShows(app: App, file: TFile, size: number): Promise<void> {
     const ref = app.vault.on('modify', (changed) => {
       if (changed.path === file.path && file.stat.size === size) done();
     });
-    const timer = setTimeout(done, STAT_WAIT_MS);
+    const timer = window.setTimeout(done, STAT_WAIT_MS);
     function done(): void {
       app.vault.offref(ref);
-      clearTimeout(timer);
+      window.clearTimeout(timer);
       resolve();
     }
     if (file.stat.size === size) done();

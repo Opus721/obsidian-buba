@@ -81,14 +81,14 @@ export function seekFrame(video: FrameVideo, time: number, limit: number): Promi
     let done = false;
     let seeked = false;
     let shown = false;
-    let grace: ReturnType<typeof setTimeout> | undefined;
+    let grace: number | undefined;
     let paint: number | undefined;
     let request: number | undefined;
     const frames = video.requestVideoFrameCallback !== undefined;
     const from = video.currentTime;
     const atPoint = (shown: number): boolean =>
       Math.abs(shown - time) < Math.abs(shown - from) && time - shown < LONGEST_FRAME_S;
-    const timer = setTimeout(() => finish(new Error(`no video frame in ${limit} ms`)), limit);
+    const timer = window.setTimeout(() => finish(new Error(`no video frame in ${limit} ms`)), limit);
     const ask = () => {
       request = video.requestVideoFrameCallback?.((_now, metadata) => {
         request = undefined;
@@ -108,16 +108,16 @@ export function seekFrame(video: FrameVideo, time: number, limit: number): Promi
       if (done || !seeked) return;
       if (shown) return finish();
       if (grace !== undefined || video.readyState < HAVE_CURRENT_DATA) return;
-      grace = setTimeout(() => finish(), FRAME_MS);
-      if (!frames) paint = requestAnimationFrame(() => finish());
+      grace = window.setTimeout(() => finish(), FRAME_MS);
+      if (!frames) paint = window.requestAnimationFrame(() => finish());
     }
     function finish(error?: Error): void {
       if (done) return;
       done = true;
-      clearTimeout(timer);
-      clearTimeout(grace);
+      window.clearTimeout(timer);
+      window.clearTimeout(grace);
       if (request !== undefined) video.cancelVideoFrameCallback?.(request);
-      if (paint !== undefined) cancelAnimationFrame(paint);
+      if (paint !== undefined) window.cancelAnimationFrame(paint);
       video.removeEventListener('seeked', onSeeked);
       for (const type of DATA) video.removeEventListener(type, check);
       video.removeEventListener('error', onError);

@@ -149,7 +149,7 @@ export class PdfPages {
       alive();
       const base = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale: side / Math.max(base.width, base.height, 1) });
-      const canvas = document.createElement('canvas');
+      const canvas = createEl('canvas');
       canvas.width = Math.min(side, Math.max(1, Math.round(viewport.width)));
       canvas.height = Math.min(side, Math.max(1, Math.round(viewport.height)));
       const context = canvas.getContext('2d');

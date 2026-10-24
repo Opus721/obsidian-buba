@@ -439,11 +439,11 @@ function watchCreated(app: App) {
       const rest = new Set(paths.filter((path) => !seen.has(path) && !app.vault.getAbstractFileByPath(path)));
       if (rest.size) {
         await new Promise<void>((done) => {
-          const timer = setTimeout(done, ms);
+          const timer = window.setTimeout(done, ms);
           wake = (path) => {
             rest.delete(path);
             if (rest.size) return;
-            clearTimeout(timer);
+            window.clearTimeout(timer);
             done();
           };
         });
@@ -453,6 +453,9 @@ function watchCreated(app: App) {
     },
   };
 }
+
+/** A file, not a folder: only files carry `stat`. */
+const isFile = (item: TAbstractFile | null): item is TFile => item !== null && 'stat' in item;
 
 /**
  * Redo of a deletion: which of the step's files are at their old place as the same file (size and time);
@@ -464,10 +467,10 @@ export function trashReady(app: App, step: TrashStep): { files: TFile[]; skipped
   const skipped: TrashUnchecked[] = [];
   for (const op of step.ops) {
     const file = app.vault.getAbstractFileByPath(op.from);
-    const print = file && 'stat' in file ? statPrint((file as TFile).stat) : null;
-    if (!print) skipped.push({ op, why: 'missing' });
+    const print = isFile(file) ? statPrint(file.stat) : null;
+    if (!print || !isFile(file)) skipped.push({ op, why: 'missing' });
     else if (!samePrint(print, op.print)) skipped.push({ op, why: 'changed' });
-    else files.push(file as TFile);
+    else files.push(file);
   }
   return { files, skipped };
 }

@@ -126,7 +126,7 @@ interface PreviewSchema extends DBSchema {
 const stores = new WeakMap<Plugin, DevicePreviews>();
 
 /** The window's `fetch`: the file start and the probes are read with it, like an image original. */
-const fetchFile: Fetcher = (src, init) => fetch(src, init);
+const fetchFile: Fetcher = (src, init) => window.fetch(src, init);
 
 /**
  * The preview store, one per plugin instance; plugin unload closes the database and revokes URLs. A preview
@@ -346,7 +346,7 @@ function buildPreview(
  * Image: the original size from the header via <img>, the pixels already downscaled by `createImageBitmap`.
  */
 async function imagePreview(src: string, type: string): Promise<BuiltPreview> {
-  const response = await fetch(src);
+  const response = await window.fetch(src);
   if (!response.ok) throw new Error(`reading original: ${response.status}`);
   const original = await response.blob();
   const { width, height } = await naturalSize(original);
@@ -388,7 +388,7 @@ async function naturalSize(original: Blob): Promise<Size> {
  */
 async function videoPreview(src: string, type: string, mobileApp: boolean): Promise<BuiltPreview> {
   const plan = videoFramePlan(mobileApp);
-  const video = document.createElement('video');
+  const video = createEl('video');
   video.muted = true;
   video.playsInline = true;
   video.preload = plan.preload;

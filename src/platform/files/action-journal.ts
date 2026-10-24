@@ -89,7 +89,7 @@ export function actionJournal(
         if (!(await adapter.exists(file))) continue;
         // Streamed from the file URL, like preview originals (`previews/store.ts`): only a chunk and a
         // partial line are in memory, not the file.
-        const response = await fetch(adapter.getResourcePath(file), { cache: 'no-store' });
+        const response = await window.fetch(adapter.getResourcePath(file), { cache: 'no-store' });
         if (!response.ok || !response.body) throw new Error(`reading log ${file}: ${response.status}`);
         const reader = response.body.getReader();
         // One splitter per file, so a cut-off end of last month's file does not merge with this month's first

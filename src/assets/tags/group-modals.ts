@@ -9,10 +9,9 @@ import { groupChoices, type GroupChoice, type GroupInfo } from '../../core/tags/
 /**
  * Confirmation: lines of text, an action button and "Cancel"; closing without a choice does nothing.
  * `warning` marks an irreversible action, like Obsidian's delete dialog: "Cancel" first, the action as a red
- * button (`setWarning`, as in "Delete files" in src/assets/actions/menu-items.ts; `setDestructive` needs
- * Obsidian 1.13 and the plugin supports 1.12.3). It mimics Obsidian's confirmation dialog: `mod-confirmation`
- * on `containerEl` and `mod-cancel` on "Cancel", as `ConfirmationModal` and `setCancel` set them (both 1.13+
- * only). On iPhone these make the dialog a bottom sheet without the close button and with "Cancel" at the
+ * button (`setDestructive().setCta()`, as in "Delete files" in src/assets/actions/menu-items.ts). It mimics
+ * Obsidian's confirmation dialog: `mod-confirmation` on `containerEl` and `mod-cancel` on "Cancel", as
+ * `ConfirmationModal` and `setCancel` set them (both 1.13+ only). On iPhone these make the dialog a bottom sheet without the close button and with "Cancel" at the
  * bottom (Obsidian's app.css, `.is-mobile` and `.is-phone` rules); on desktop these classes have no rules.
  * Buttons are a row in `modalEl` after `contentEl`, as in `ConfirmationModal` and the "What Obsidian needs"
  * dialog (src/assets/settings/setup-window.ts): full width on phones; the row is removed on close.
@@ -56,7 +55,7 @@ export class ConfirmModal extends Modal {
       this.close();
       this.#run();
     });
-    if (this.#warning) action.setWarning();
+    if (this.#warning) action.setDestructive().setCta();
     else {
       action.setCta();
       cancel();

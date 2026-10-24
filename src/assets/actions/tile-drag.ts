@@ -54,7 +54,7 @@ function previewIcon(tile: HTMLElement): string | undefined {
   const img = tile.querySelector('img');
   if (!img?.complete || !img.naturalWidth || !img.naturalHeight) return undefined;
   const scale = Math.min(1, ICON_PX / Math.max(img.naturalWidth, img.naturalHeight));
-  const canvas = tile.doc.createElement('canvas');
+  const canvas = createEl('canvas');
   canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
   canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
   canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);

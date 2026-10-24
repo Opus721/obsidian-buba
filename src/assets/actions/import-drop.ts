@@ -22,23 +22,25 @@ import { onGridEvent, type GridLeafView } from '../grid/selection.ts';
 
 /** Class of the grid body while files from disk are dragged over it, as on an Obsidian tree folder. */
 const OVER = 'is-being-dragged-over';
+/** The same moment on the whole view, which draws the overlay (grid.css). */
+const VIEW_OVER = 'buba-drop-over';
 /** A notice with refusals stays longer so the names can be read, ms. */
 const REFUSED_MS = 10_000;
 
 export function registerImportDrop(plugin: Plugin, assets: BubaAssets): void {
-  onGridEvent(plugin, assets, 'dragover', (evt, { body }) => {
+  onGridEvent(plugin, assets, 'dragover', (evt, { view, body }) => {
     const dt = evt.dataTransfer;
     if (!fromDisk(dt)) return;
     evt.preventDefault();
     dt.dropEffect = 'copy';
-    body.addClass(OVER);
+    over(view, body, true);
   });
-  onGridEvent(plugin, assets, 'dragleave', (evt, { body }) => {
+  onGridEvent(plugin, assets, 'dragleave', (evt, { view, body }) => {
     const to = evt.relatedTarget as Node | null;
-    if (!to || !body.contains(to)) body.removeClass(OVER);
+    if (!to || !body.contains(to)) over(view, body, false);
   });
   onGridEvent(plugin, assets, 'drop', (evt, { view, body }) => {
-    body.removeClass(OVER);
+    over(view, body, false);
     const dt = evt.dataTransfer;
     if (!fromDisk(dt)) return;
     evt.preventDefault();
@@ -51,6 +53,16 @@ export function registerImportDrop(plugin: Plugin, assets: BubaAssets): void {
     evt.preventDefault();
     void put(view, assets, files);
   });
+}
+
+function over(view: GridLeafView, body: HTMLElement, on: boolean): void {
+  if (on) {
+    body.addClass(OVER);
+    view.contentEl.addClass(VIEW_OVER);
+  } else {
+    body.removeClass(OVER);
+    view.contentEl.removeClass(VIEW_OVER);
+  }
 }
 
 /** Files from disk are being dragged, not Buba tiles: `dragover` cannot read the data, only `types`. */

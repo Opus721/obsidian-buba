@@ -133,10 +133,16 @@ body:not(.is-mobile) .buba-color-modal .buba-color-custom input[type='text'] {
   gap: var(--buba-cw-group-gap);
 }
 
-/* Pinned and recent are redrawn in their own node; its groups sit directly in the window column with the same
-   gap. */
+/* Pinned and recent are redrawn in their own node, a column with the same gap as the window's; with neither
+   it takes no place. */
 .buba-color-rows {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  gap: var(--buba-cw-group-gap);
+}
+
+.buba-color-rows:empty {
+  display: none;
 }
 
 .buba-color-group {

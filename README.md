@@ -5,7 +5,7 @@ videos, GIFs, PDFs, Photoshop and Illustrator files, notes. Mark files with tags
 again in a click, look at them full screen and drag them onto a canvas. Your files stay where they are, as plain files
 in plain folders.
 
-![Buba on a computer: folder tree, grid of previews and the file panel with tags, rating and a comment](docs/readme/desktop.png)
+![Buba on a computer: folder tree with folder colours and tags, grid of previews and the file panel with tags, rating and a comment](docs/readme/desktop.png)
 
 ## What it does
 
@@ -41,6 +41,8 @@ in plain folders.
 ## For AI agents
 
 If an AI agent generates files for you, let it record a passport for each one, so you see later what made it.
+
+![The file panel of a generated picture: the prompt with links to its two references, the model, the parameters, the cost and the poster made from it](docs/readme/generation.png)
 
 - **The skill.** Copy the folder [`skills/buba-obsidian`](skills/buba-obsidian) into your agent's skills folder,
   for example `~/.claude/skills/` for Claude Code. The agent then knows when to write a passport and how to use the

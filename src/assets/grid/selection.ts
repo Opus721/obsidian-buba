@@ -230,7 +230,7 @@ export function onGridEvent<K extends keyof DocumentEventMap>(
  * hides them) keeps its selection and place.
  */
 function selectAdded(assets: BubaAssets, view: GridLeafView, added: ReadonlySet<string>, frames = 0): void {
-  requestAnimationFrame(() => {
+  window.requestAnimationFrame(() => {
     if (!gridViews(assets).includes(view)) return;
     const shown = view.pathsInOrder().filter((path) => added.has(path));
     const [first] = shown;
@@ -302,7 +302,7 @@ function announce(view: GridLeafView, state: ViewSelection): void {
 
 /** Reconciliation in the next frame, one per frame. */
 function schedule(view: GridLeafView, state: ViewSelection): void {
-  state.frame ||= requestAnimationFrame(() => {
+  state.frame ||= window.requestAnimationFrame(() => {
     state.frame = 0;
     reconcile(view, state);
   });

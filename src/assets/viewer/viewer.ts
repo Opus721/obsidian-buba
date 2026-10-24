@@ -370,7 +370,7 @@ class ViewerModal extends Modal {
   #watchStage(): void {
     if (this.#resize) return;
     const stage = this.contentEl;
-    const { ResizeObserver: Observer } = stage.win as Window & typeof globalThis;
+    const { ResizeObserver: Observer } = stage.win as typeof window;
     this.#resize = new Observer(() => this.#refit());
     this.#resize.observe(stage);
   }

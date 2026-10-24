@@ -309,7 +309,8 @@ class DeleteFilesModal extends Modal {
       .onClick(() => this.close());
     new ButtonComponent(buttons)
       .setButtonText(t('deleteButton'))
-      .setWarning()
+      .setDestructive()
+      .setCta()
       .onClick(() => {
         this.#confirmed = true;
         this.close();
@@ -407,7 +408,8 @@ class ReferenceDeleteModal extends Modal {
       .onClick(() => this.close());
     new ButtonComponent(buttons)
       .setButtonText(t('deleteButton'))
-      .setWarning()
+      .setDestructive()
+      .setCta()
       .onClick(() => {
         this.#confirmed = true;
         this.close();

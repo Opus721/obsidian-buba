@@ -1,5 +1,7 @@
 // Plugin build: src/main.ts → main.js, component styles (*.css next to the code) → styles.css.
-// The build number is the commit it was built from, baked into the code as __BUBA_COMMIT__.
+// The build number is the commit it was built from, baked into the code as __BUBA_COMMIT__. The public copy
+// of the source has its own history, so it names that commit in `.build-commit` (tools/export-public.mjs):
+// built there, main.js is the released file byte for byte.
 import { execSync } from 'node:child_process';
 import { builtinModules } from 'node:module';
 import fs from 'node:fs';
@@ -9,6 +11,7 @@ import { noticesBanner } from './tools/third-party.mjs';
 const production = process.argv[2] === 'production';
 
 function commit() {
+  if (fs.existsSync('.build-commit')) return fs.readFileSync('.build-commit', 'utf8').trim();
   try {
     const quiet = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] };
     const sha = execSync('git rev-parse HEAD', quiet).trim();

@@ -16,7 +16,7 @@ export const WAIT_MS = 5000;
 export function mediaDuration(
   src: string,
   signal: AbortSignal,
-  make: () => HTMLVideoElement = () => document.createElement('video'),
+  make: () => HTMLVideoElement = () => createEl('video'),
 ): Promise<number | null> {
   if (signal.aborted) return Promise.resolve(null);
   const media = make();
@@ -24,13 +24,13 @@ export function mediaDuration(
   media.playsInline = true;
   media.preload = 'metadata';
   return new Promise((resolve) => {
-    const timer = setTimeout(() => finish(null), WAIT_MS);
+    const timer = window.setTimeout(() => finish(null), WAIT_MS);
     const onMeta = () =>
       finish(Number.isFinite(media.duration) && media.duration > 0 ? media.duration : null);
     const onError = () => finish(null);
     const onAbort = () => finish(null);
     function finish(seconds: number | null): void {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
       media.removeEventListener('loadedmetadata', onMeta);
       media.removeEventListener('error', onError);
       signal.removeEventListener('abort', onAbort);

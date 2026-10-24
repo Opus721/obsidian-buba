@@ -490,7 +490,7 @@ export class GridView extends ItemView implements BubaGridView {
   /** Index and source changes are batched into one redraw per frame. */
   #schedule(): void {
     if (this.#frame || !this.#tiles) return;
-    this.#frame = requestAnimationFrame(() => {
+    this.#frame = window.requestAnimationFrame(() => {
       this.#frame = 0;
       this.#render(true);
     });

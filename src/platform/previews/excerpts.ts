@@ -155,7 +155,7 @@ export class Excerpts implements ExcerptStore {
 const stores = new WeakMap<Plugin, Excerpts>();
 
 /** The window's `fetch`, used to read the file start, as for PSD. */
-const fetchFile: Fetcher = (src, init) => fetch(src, init);
+const fetchFile: Fetcher = (src, init) => window.fetch(src, init);
 
 /**
  * The first lines store, one per plugin instance. Desktop: 2 concurrent reads and 2000 texts; phone: 1 and
@@ -189,7 +189,7 @@ export function excerptStore(plugin: Plugin): ExcerptStore {
           throw new Error('file URL on iPhone ignores Range — a file over 64 MB is not read');
         return (await readHead(fetchFile, vault.getResourcePath(file), EXCERPT_HEAD, file.stat.size)).bytes;
       },
-      frame: (run) => void requestAnimationFrame(run),
+      frame: (run) => void window.requestAnimationFrame(run),
     },
     Platform.isMobile ? { reads: 1, memory: PHONE_EXCERPT_MEMORY } : {},
   );

@@ -36,8 +36,11 @@ export function previewSections(plugin: Plugin): InspectorSection[] {
           const kind = file ? previewKind(file.extension) : null;
           const preview = store.get(first);
           const state = previewState(kind, preview);
-          const frame = el.createDiv({ cls: 'buba-inspector-preview' });
-          if (state === 'image' && preview) frame.createEl('img', { attr: { src: preview.url } });
+          const image = state === 'image' ? preview : undefined;
+          const frame = el.createDiv({
+            cls: image ? 'buba-inspector-preview mod-image' : 'buba-inspector-preview',
+          });
+          if (image) frame.createEl('img', { attr: { src: image.url } });
           // The icon follows the format family, as on the tile, for any file: a pen for AI, an image file for
           // PSD, an archive for ZIP, a text page for MD; images and video keep "image" and "film". A file
           // outside the family table gets `file`. First lines of MD and TXT are a tile feature; the panel

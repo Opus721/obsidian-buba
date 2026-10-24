@@ -188,7 +188,8 @@ function renderComments(
     }
   };
   // The key scope catches Enter before the open note's Obsidian commands. Shift+Enter inserts a line break;
-  // IME composition commits and auto-repeat of a held key do not send the comment.
+  // IME composition commits and auto-repeat of a held key do not send the comment. Safari ends the
+  // composition before the keydown of that Enter, so only the deprecated keyCode 229 still marks it.
   let composing = false;
   input.inputEl.addEventListener('compositionstart', () => {
     composing = true;
@@ -225,7 +226,7 @@ function renderComments(
   // field's window: the panel can be in an Obsidian popout window; the first notification arrives once the
   // field is laid out. Layout runs in the next frame: changing the field height inside the notification would
   // cause "ResizeObserver loop completed with undelivered notifications".
-  const win = form.win as (Window & typeof globalThis) | undefined;
+  const win = form.win as typeof window | undefined;
   let width = -1;
   const resize = win?.ResizeObserver
     ? new win.ResizeObserver(([entry]) => {

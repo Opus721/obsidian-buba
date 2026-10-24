@@ -39,7 +39,7 @@
   --icon-size: round(var(--icon-xs), 1px);
 }
 
-.buba-tag-tree .buba-tag-cell:not(.mod-group):not(:has(> svg.lucide-plus)) {
+.buba-tag-tree .buba-tag-cell:not(.mod-group):not(.mod-new) {
   width: var(--buba-tag-cell);
 }
 

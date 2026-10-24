@@ -41,7 +41,7 @@
   height: calc-size(auto, round(up, size, 1px));
 }
 
-.buba-inspector-preview:has(> img) {
+.buba-inspector-preview.mod-image {
   text-align: center;
 }
 

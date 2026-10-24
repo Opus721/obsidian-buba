@@ -61,7 +61,7 @@ export function addNewFolderItem(menu: Menu, open: () => void): void {
 export function drawNewFolderRow(container: HTMLElement, open: () => void): HTMLElement {
   const self = container
     .createDiv({ cls: 'tree-item' })
-    .createDiv({ cls: 'tree-item-self is-clickable', attr: { role: 'button' } });
+    .createDiv({ cls: 'tree-item-self is-clickable buba-tree-new', attr: { role: 'button' } });
   setIcon(self.createDiv({ cls: 'buba-tree-icon', attr: { 'aria-hidden': 'true' } }), 'plus');
   self.createDiv({ cls: 'tree-item-inner u-muted', text: t('newFolder') });
   self.addEventListener('click', () => open());
