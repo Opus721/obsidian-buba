@@ -1219,6 +1219,13 @@ export class TileGrid {
       el.addEventListener('mouseenter', () => this.#enter(el));
       el.addEventListener('mousemove', () => (this.#aimed = el));
       el.addEventListener('mouseleave', () => this.#leave(el));
+      // A name cut with "…" shows whole in Obsidian's hover tooltip, as the path in the file panel: Obsidian
+      // shows it for any element with `aria-label` under the mouse. The label is set just before, on
+      // `pointerover` (it comes before `mouseover`), and only for a cut name: a whole one is not repeated.
+      name.addEventListener('pointerover', () => {
+        if (name.scrollWidth > name.clientWidth) name.setAttr('aria-label', name.textContent ?? '');
+        else name.removeAttribute('aria-label');
+      });
     }
     return el;
   }

@@ -48,7 +48,8 @@ import { contrastClasses } from '../color/dot.ts';
 import { openGrid } from '../index.ts';
 import { passportStorage } from '../../platform/passports.ts';
 import { RowMenus, showRowMenu, type MenuAt, type RowMenuAt } from '../../platform/row-menus.ts';
-import { endTreeRowDrag, startTreeRowDrag } from '../../platform/tree-drag.ts';
+import { dragExpander } from '../../platform/drag-expand.ts';
+import { endTreeRowDrag, startTreeRowDrag, treeRowDrag } from '../../platform/tree-drag.ts';
 import { isTypingTarget } from '../../core/tags/keys.ts';
 import { nameOf } from '../../platform/files/file-index.ts';
 import { addNewFolderItem, drawNewFolderRow, openNewFolder } from './create-folder.ts';
@@ -617,6 +618,26 @@ export class TreeView extends ItemView {
       const icon = this.#icons[this.#rows.findIndex((row) => row.path === hit.path)]?.icon || 'folder';
       startTreeRowDrag(evt, { kind: 'folder', path: hit.path }, icon, nameOf(hit.path));
     });
+    // A collapsed folder held under a drag expands after Obsidian's wait (src/platform/drag-expand.ts), so a
+    // drop can go deeper and shows where it landed; the dragged folder and folders inside it do not expand.
+    const expander = dragExpander();
+    container.addEventListener('dragover', (evt) => {
+      const hit = target(evt);
+      const dragged = treeRowDrag(evt.dataTransfer);
+      const own =
+        dragged?.kind === 'folder' &&
+        (hit?.path === dragged.path || hit?.path.startsWith(`${dragged.path}/`));
+      if (!hit || own) return expander.clear();
+      const collapsed = hit.self.hasClass('mod-collapsible') && !this.#expanded.has(hit.path);
+      expander.over(container.win, hit.path, collapsed, () => {
+        if (!this.#expanded.has(hit.path)) this.#toggleFolder(hit.path);
+      });
+    });
+    container.addEventListener('dragleave', (evt) => {
+      if (!container.contains(evt.relatedTarget as Node | null)) expander.clear();
+    });
+    container.addEventListener('drop', () => expander.clear());
+    container.addEventListener('dragend', () => expander.clear());
   }
 
   /** The row's folder from Obsidian: the file index may be ahead of the vault, and then there is no menu. */

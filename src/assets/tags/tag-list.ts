@@ -53,6 +53,7 @@ import { pathsVersionOf } from '../../platform/files/file-index.ts';
 import { vaultFileIndex } from '../../platform/files/vault-index.ts';
 import type { BubaAssets } from '../api.ts';
 import { contrastClasses, tagDot } from '../color/dot.ts';
+import { dragExpander, type DragExpander } from '../../platform/drag-expand.ts';
 import { RowMenus } from '../../platform/row-menus.ts';
 import { tagFiles } from './picker.ts';
 import { setListedTags } from './listed.ts';
@@ -311,6 +312,8 @@ function renderTagList(containerEl: HTMLElement, context: ListContext): () => vo
   const search = new SearchComponent(containerEl).setPlaceholder(t('findTag')).setValue(list.query());
   const listEl = containerEl.createDiv({ cls: 'buba-tag-tree' });
   const menus = new RowMenus();
+  const expander = dragExpander();
+  listEl.addEventListener('dragend', () => expander.clear());
   let open = loadOpen(app);
   // What is drawn: the signature of all rows without counts, the rows of the last render, each drawn row's
   // count cell with its count, and the container for the next row of a group; `tail` means "New tag" is not
@@ -362,7 +365,7 @@ function renderTagList(containerEl: HTMLElement, context: ListContext): () => vo
       let el: HTMLElement;
       let self: HTMLElement;
       if (row.kind === 'group')
-        ({ children, flair: el, self } = drawGroup(listEl, row, context, menus, toggle));
+        ({ children, flair: el, self } = drawGroup(listEl, row, context, menus, toggle, expander));
       else ({ flair: el, self } = drawTag(row.depth ? children : listEl, row, context, menus));
       flairs.push({ el, count: row.count });
       selves.push({ self, source: row.source });
@@ -481,6 +484,7 @@ function drawGroup(
   context: ListContext,
   menus: RowMenus,
   toggle: (group: string) => void,
+  expander: DragExpander,
 ): { children: HTMLElement; flair: HTMLElement; self: HTMLElement } {
   const item = listEl.createDiv({ cls: 'tree-item buba-tag-group' });
   const self = item.createDiv({ cls: 'tree-item-self is-clickable', attr: { 'data-group': row.key } });
@@ -517,16 +521,22 @@ function drawGroup(
     if (storage) showGroupMenu(context.app, storage, row.title, at, context.exists);
   });
   self.addEventListener('dragover', (evt) => {
+    // A collapsed group held under a drag expands after Obsidian's wait, as a folder: a tag dropped into it
+    // shows inside, tiles can reach its tags.
+    if (row.collapsible) expander.over(self.win, row.key, !row.expanded, () => toggle(row.key));
     if (tagInto(evt.dataTransfer, row.title) === undefined || !evt.dataTransfer) return;
     evt.preventDefault();
     evt.dataTransfer.dropEffect = 'move';
     self.addClass('is-being-dragged-over');
   });
   self.addEventListener('dragleave', (evt) => {
-    if (!self.contains(evt.relatedTarget as Node | null)) self.removeClass('is-being-dragged-over');
+    if (self.contains(evt.relatedTarget as Node | null)) return;
+    self.removeClass('is-being-dragged-over');
+    expander.clear();
   });
   self.addEventListener('drop', (evt) => {
     self.removeClass('is-being-dragged-over');
+    expander.clear();
     if (tagInto(evt.dataTransfer, row.title) === undefined || !evt.dataTransfer) return;
     evt.preventDefault();
     dropTag(evt.dataTransfer, row.title, context);

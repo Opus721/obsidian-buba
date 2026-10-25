@@ -2,7 +2,7 @@
 // a "Copy path" button, size, type and dates; for several files their count and total size. Renaming goes
 // only through `fileManager.renameFile`, so Obsidian updates links to the file. Name, path and type are text
 // only.
-import { Notice, Platform, TextComponent, type App, type TFile } from 'obsidian';
+import { Notice, Platform, TextAreaComponent, type App, type TFile } from 'obsidian';
 // The size of one file and the total of several follow one rule, that of Windows Explorer's "Properties"; it
 // lives in the core so `node --test` checks it without `obsidian`.
 import { t } from '../../core/i18n/dict/inspector.ts';
@@ -73,7 +73,10 @@ function renderOne(
 ): () => void {
   const { base, ext } = splitName(file.name);
   const nameEl = el.createDiv({ cls: 'buba-inspector-name' });
-  const input = new TextComponent(nameEl).setValue(base);
+  // A long name wraps instead of being cut: the field grows by whole lines (`fitName`), so the whole name is
+  // readable in the panel on a computer and on a phone, like Obsidian's inline title.
+  const input = new TextAreaComponent(nameEl).setValue(base);
+  input.inputEl.rows = 1;
   input.inputEl.spellcheck = false;
   if (ext) nameEl.createSpan({ cls: 'buba-inspector-ext', text: `.${ext}` });
   // The panel redrew while another name was being typed: the typed text, focus and selection go back into the
@@ -130,6 +133,31 @@ function renderOne(
     input.inputEl.blur();
   });
   input.inputEl.addEventListener('blur', () => void commit());
+  // A name has no line breaks: a pasted one becomes spaces as it arrives.
+  input.inputEl.addEventListener('input', () => {
+    const field = input.inputEl;
+    if (/[\r\n]/.test(field.value)) {
+      const { selectionStart, selectionEnd } = field;
+      field.value = field.value.replace(/\r\n|[\r\n]/g, ' ');
+      field.setSelectionRange(selectionStart, selectionEnd);
+    }
+    fitName(field);
+  });
+  // The panel width changed, so the name may wrap to another number of lines. The observer belongs to the
+  // field's window (the panel can be in a popout); fitting runs in the next frame, as in comments-section.ts.
+  const win = nameEl.win as typeof window | undefined;
+  let width = -1;
+  const resize = win?.ResizeObserver
+    ? new win.ResizeObserver(([entry]) => {
+        const next = entry?.contentRect.width ?? -1;
+        if (next === width) return;
+        width = next;
+        win.requestAnimationFrame(() => {
+          if (!closed) fitName(input.inputEl);
+        });
+      })
+    : null;
+  resize?.observe(nameEl);
 
   const rows = el.createDiv({ cls: 'buba-inspector-rows' });
   pathRow(rows, file.path, pathTools);
@@ -139,6 +167,7 @@ function renderOne(
   row(rows, t('labelModified'), formatDateTime(file.stat.mtime, obsidianLanguage(), look));
   return () => {
     closed = true;
+    resize?.disconnect();
     // Cleanup before a redraw: if the field has focus and the user edited it (it differs from what was
     // drawn), the typed text and selection go into the handoff. An unedited field carries nothing: if the
     // file was renamed elsewhere, the next draw shows the new name and leaving the field reverts nothing.
@@ -158,6 +187,33 @@ function renderOne(
       if (handoff.typed === kept) handoff.typed = null;
     });
   };
+}
+
+/** Most lines the name field grows to; a longer name scrolls inside the field. */
+const NAME_MAX_LINES = 5;
+
+/**
+ * Name field height: as many whole lines as the name takes at the field's width, up to `NAME_MAX_LINES`, then
+ * it scrolls. The count comes from the `scrollHeight` of the field at one row, as for the comment field. A
+ * taller field can make the panel scroll, and its scrollbar narrows the field so the name takes one more
+ * line: then the count is taken again at the new height. A field not in the document has nothing to measure.
+ */
+function fitName(field: HTMLTextAreaElement): void {
+  if (!field.isConnected) return;
+  const style = field.win.getComputedStyle(field);
+  const line = parseFloat(style.lineHeight);
+  if (!(line > 0)) return;
+  const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+  const lines = (): number => Math.max(1, Math.round((field.scrollHeight - padding) / line));
+  field.setCssStyles({ overflowY: 'hidden' });
+  field.rows = 1;
+  let count = lines();
+  field.rows = Math.min(count, NAME_MAX_LINES);
+  for (let i = 0; i < 2 && count < NAME_MAX_LINES && field.scrollHeight > field.clientHeight; i++) {
+    count = lines();
+    field.rows = Math.min(count, NAME_MAX_LINES);
+  }
+  field.setCssStyles({ overflowY: count > NAME_MAX_LINES ? 'auto' : 'hidden' });
 }
 
 function renderMany(el: HTMLElement, files: readonly TFile[]): void {

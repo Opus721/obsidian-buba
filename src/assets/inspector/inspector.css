@@ -52,20 +52,31 @@
 }
 
 /* File name and extension: the text line has a whole-pixel height. The extension is sized by cap height: the
-   line is trimmed to it (`text-box`), the box is the cap height rounded up with the line at its bottom,
-   offset from the field top by whole pixels. This keeps the baseline on a whole pixel even at 200 % zoom,
+   line is trimmed to it (`text-box`), the box is the cap height rounded up with the line at its bottom. It
+   stands by the field's last line: offset from the field bottom by whole pixels, as far as from the top of a
+   one-line field. This keeps the baseline on a whole pixel even at 200 % zoom,
    where a whole-height line put it on a half pixel. Width is rounded to a whole pixel (`calc-size`; iPhone
    Safari lacks it). */
 .buba-inspector-name {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: var(--size-4-1);
 }
 
-.buba-inspector-name input {
+/* The name field is a standard Obsidian field that wraps a long name: on one line it has Obsidian's
+   `--input-height` like "Link", with the padding of the comment field (comments.css); file-section.ts grows
+   it by whole lines. */
+.buba-inspector-name textarea {
   flex: auto;
   min-width: 0;
+  resize: none;
+  overflow-y: hidden;
   line-height: round(calc(var(--line-height-tight) * 1em), 1px);
+  --buba-name-free: calc(
+    var(--input-height) - round(calc(var(--line-height-tight) * 1em), 1px) - 2 * var(--input-border-width)
+  );
+  padding-top: round(down, calc(var(--buba-name-free) / 2), 1px);
+  padding-bottom: calc(var(--buba-name-free) - round(down, calc(var(--buba-name-free) / 2), 1px));
 }
 
 .buba-inspector-ext {
@@ -79,7 +90,10 @@
   box-sizing: border-box;
   width: calc-size(max-content, round(up, size, 1px));
   height: var(--buba-ext-h);
-  margin-top: round(down, calc((var(--input-height) - var(--buba-ext-h)) / 2), 1px);
+  margin-bottom: calc(
+    var(--input-height) - var(--buba-ext-h) -
+      round(down, calc((var(--input-height) - var(--buba-ext-h)) / 2), 1px)
+  );
   align-content: end;
   text-box: trim-both cap alphabetic;
 }

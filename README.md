@@ -2,19 +2,75 @@
 
 Buba turns the folders of your vault into a visual asset library. Every file shows up as a preview in a grid: images, videos, GIFs, PDFs, Photoshop and Illustrator files, notes. Mark files with tags, a rating and comments, find them again in a click, look at them full screen and drag them onto a canvas. Your files stay where they are, as plain files in plain folders.
 
-![Buba on a computer: folder tree with folder colours and tags, grid of previews and the file panel with tags, rating and a comment](docs/readme/desktop.png)
+![Buba on a computer: folder tree with folder colours and tags, grid of previews and the file panel with tags and a rating](docs/readme/desktop.png)
 
-## What it does
+## Browse your folders
 
-- **Folders as a grid of previews.** A folder tree on the left, a grid in the middle: one folder, a folder with its subfolders, or all files at once. Three layouts — an even grid, justified rows and a waterfall — with a tile size slider, file names on or off, sorting by two keys and a file type filter. Each folder can keep its own view.
-- **Previews for many formats.** Images (PNG, JPG, GIF, WebP and more), videos, the first page of a PDF, the embedded preview of PSD, PSB and AI files, the beginning of Markdown and text notes. Videos play on hover on a computer.
-- **Tags, rating and comments for any file**, not only for notes. Tags have colours and can be grouped; open every file with a tag, or every file without tags. Comments can be marked as done.
-- **File panel.** Preview, size, format and resolution, tags, rating, comments, a web link for the file and the canvases it is on.
-- **Viewer.** Open an image or a video full screen and move through the folder with the keyboard or a swipe.
-- **Canvas.** Drag files from the grid onto a canvas to add them as cards.
-- **Everyday file work.** Rename, duplicate, move and delete from the grid with undo. Drop or paste files from your computer to add them to the open folder, drag files from the grid into other apps.
-- **Generation passport.** For a generated image, video or sound, the file panel shows what made it: model, service, the prompt with links to its references, every parameter, the cost, when and by whom. "Copy for agent" hands all of it to an agent that should repeat the generation. The passport is written by the agent that made the file (see below).
-- **Commands for AI agents.** Buba adds commands to the Obsidian command line, so an agent can find files by tag, read and set tags, ratings and comments, open a folder, add file cards to a canvas and record generation passports:
+- **A grid of previews for any folder**: one folder, a folder with its subfolders, every file with a tag, or all files at once. Go back and forward through visited folders like in a browser.
+- **Three layouts**: Grid with even tiles, Justified rows and Columns, with a tile size slider and file names on or off.
+- **Sorting by two keys**, for example by rating and then by date, and a file type filter.
+- **Each folder can keep its own view**, or all folders share one.
+- **Previews for many formats**: PNG, JPG, GIF, WebP and other images, videos, the first page of a PDF, the embedded preview of PSD, PSB and AI files, the beginning of Markdown and text notes. Other files get a format badge.
+
+![Switching the grid between the Grid, Justified and Columns layouts and changing the tile size](docs/readme/layouts.gif)
+
+## Organize the tree
+
+- **Folder colours and icons** in the Buba tree, so the folders you use most stand out.
+- **Drag a folder onto another folder** to move it inside; the folder under the pointer lights up. Drop it on "All files" to move it to the top level. The open folder stays open at its new place, and Ctrl+Z in the grid moves it back.
+- **Rename and delete folders** right in the tree, from the menu or with the Delete key. Delete asks first, and warns when files inside are references of generations.
+- **Drag a tag onto a tag group** to move it into the group, or onto "All tags" to take it out.
+
+![Dragging the Exports folder into Client work, then dragging the night tag into the status group](docs/readme/tree.gif)
+
+## Tags, ratings and comments
+
+- **Tags for any file**, not only for notes, with colours and groups. A group can be exclusive, so a file has one tag of it at a time, like a status: approved or in review.
+- **Click a tag** to see every file that has it, or open "Untagged" to find what you haven't sorted yet.
+- **A rating from one to five stars**, and sorting by it.
+- **Comments as a to-do list for the file**: mark a comment as done and it folds away under "Done", so only the open ones stay in view. Tiles with open comments show a badge.
+- **The file panel** shows the preview, size, format and resolution, tags, rating, comments, a web link for the file and the canvases it is on.
+
+![The files tagged "sea" in the grid, and the file panel of one of them with three open comments and two done ones folded under Done](docs/readme/tags.png)
+
+## Watch videos and look closer
+
+- **Videos play on hover** right in the grid, on a computer, so you find the right clip without opening each one.
+- **A full-screen viewer** for images and videos. Move through the folder with the arrow keys, or with a swipe on a phone.
+
+![Pointing at video tiles in the grid: each clip plays while the pointer is on it](docs/readme/video.gif)
+
+## Canvas and everyday file work
+
+- **Drag files from the grid onto an Obsidian canvas** to add them as cards. The file panel then lists the canvases a file is on.
+- **Rename, duplicate, move and delete** from the grid, with undo.
+- **Drop or paste files from your computer** to add them to the open folder; they stay selected, so they never get lost in the sort order. Drag files from the grid into other apps.
+
+![Dragging two pictures from the Buba grid onto a canvas next to it](docs/readme/canvas.gif)
+
+## On the phone
+
+Buba works in the Obsidian mobile app with the same grid, tree and file panel, laid out for a small screen. Switch between the Buba tree and Obsidian's file explorer at the bottom of the side panel. Menus open with a long press, the file panel is one tap away from the menu, and the viewer moves between files with a swipe.
+
+A few things need a computer: video playback on hover, dragging folders, tags and files, dropping files from the file manager. To add files on a phone, share them to Obsidian from another app or use the add items in the grid menu.
+
+![Buba on a phone: the grid, the folder tree in the side panel, the long-press menu of a file and its file panel](docs/readme/phone.png)
+
+## Generation passport
+
+For a generated image, video or sound, the file panel shows what made it: model, service, the prompt with links to its references, every parameter, the cost, when and by whom. A file used as a reference lists the files made from it. "Copy for agent" hands all of it to an agent that should repeat the generation. Passports follow files when you move or rename them, in Obsidian or in your system's file manager.
+
+The passport is written by the agent that made the file, see below.
+
+![The file panel of a generated picture: the prompt with links to its two references, the model, the parameters, the cost and the poster made from it](docs/readme/generation.png)
+
+## For AI agents
+
+If an AI agent generates files for you, let it record a passport for each one, so you see later what made it.
+
+- **The skill.** Copy the folder [`skills/buba-obsidian`](skills/buba-obsidian) into your agent's skills folder, for example `~/.claude/skills/` for Claude Code. The agent then knows when to write a passport and how to use the other Buba commands.
+- **Without the skill**, tell your agent to run `obsidian buba:passport-help`: it answers with the whole format and the steps for the Buba version you have installed.
+- **Commands.** Buba adds commands to the Obsidian command line, so an agent can find files by tag, read and set tags, ratings and comments, open a folder, add file cards to a canvas and record generation passports:
 
   ```
   obsidian buba:find tag=hero
@@ -25,14 +81,6 @@ Buba turns the folders of your vault into a visual asset library. Every file sho
 
   Also `buba:comment`, `buba:open`, `buba:canvas-add`, `buba:passport`, `buba:passport-get` and `buba:passport-help`.
 
-## For AI agents
-
-If an AI agent generates files for you, let it record a passport for each one, so you see later what made it.
-
-![The file panel of a generated picture: the prompt with links to its two references, the model, the parameters, the cost and the poster made from it](docs/readme/generation.png)
-
-- **The skill.** Copy the folder [`skills/buba-obsidian`](skills/buba-obsidian) into your agent's skills folder, for example `~/.claude/skills/` for Claude Code. The agent then knows when to write a passport and how to use the other Buba commands.
-- **Without the skill**, tell your agent to run `obsidian buba:passport-help`: it answers with the whole format and the steps for the Buba version you have installed.
 - The commands need desktop Obsidian running, with the command line turned on in Obsidian's settings. An agent that can't use the command line can drop a request file into `__buba-data/inbox/` instead; the help explains how.
 
 ## Install
@@ -41,15 +89,9 @@ Buba needs Obsidian 1.13.1 or newer, on a computer or a phone.
 
 In Obsidian: **Settings → Community plugins → Browse**, search for **Buba**, install and enable it.
 
-To install by hand: download `main.js`, `manifest.json` and `styles.css` from the [latest release](../../releases/latest), put them into the folder `<your vault>/.obsidian/plugins/buba/` and enable Buba in **Settings → Community plugins**.
+To install by hand: download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/Opus721/obsidian-buba/releases/latest), put them into the folder `<your vault>/.obsidian/plugins/buba/` and enable Buba in **Settings → Community plugins**.
 
 On first start Buba suggests two Obsidian options that help it work well: keep internal links updated when files move, and detect all file extensions so that PSD, AI and other files show up. You can come back to them later in the Buba settings.
-
-## On the phone
-
-Buba works in the Obsidian mobile app with the same grid, tree and file panel, laid out for a small screen. Menus open with a long press. A few things need a computer: video playback on hover, dragging files into other apps and dropping files from the file manager. To add files on a phone, share them to Obsidian from another app or use the add items in the grid menu.
-
-![Buba on a phone: grid of previews](docs/readme/phone.png)
 
 ## Languages
 
@@ -72,10 +114,6 @@ Buba follows your Obsidian theme. With the [Style Settings](https://github.com/m
 - No network requests, no telemetry, no account and no payment.
 - Buba reads files from outside your vault only when you drop, paste or pick them yourself, to copy them into the vault.
 
-## Coming later
-
-Generating images and videos right from Buba, with your own keys for the services you choose.
-
 ## License
 
-[MIT](LICENSE). Buba bundles two small libraries, `@tanstack/virtual-core` (MIT) and `idb` (ISC); their licences are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and at the top of `main.js`.
+[MIT](LICENSE). Buba bundles two small libraries, `@tanstack/virtual-core` (MIT) and `idb` (ISC); their licences are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and at the top of `main.js`. The photos in the screenshots are from [Unsplash](https://unsplash.com).

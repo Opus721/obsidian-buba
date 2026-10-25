@@ -2,6 +2,14 @@
 
 What changed in each release of Buba, in plain words. The newest release is at the top.
 
+## 1.0.3
+
+Long file names can be read in full, and a drag opens the closed folder or tag group it waits over.
+
+- In the file panel the name field grows with the name: one line for a short name, two for a longer one, and so on up to five lines, after which it scrolls. The whole name is readable on a computer and on a phone, and the extension stays next to the last line. Enter still saves the name; a pasted line break becomes a space.
+- On a computer, hover over a tile's name cut with "…" to see the whole name in a tooltip, like the path in the file panel.
+- Hold a dragged folder, tag or tile over a closed folder or tag group in the Buba tree for a moment and it opens, as in Obsidian's file explorer: you can drop deeper and see where it landed.
+
 ## 1.0.2
 
 Fixes for the folder tree, and the basic folder and tag moves it was missing.
