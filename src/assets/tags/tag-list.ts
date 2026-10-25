@@ -14,10 +14,14 @@
 // Obsidian's tags pane; a long list is drawn in portions: the first at once, the rest one per frame. Rows use
 // Obsidian's tree classes, names are rendered as text only, colors only after `colorCss`. A tag lives until
 // deleted: a declared tag without files shows with count 0; tags are created from the "New tag" row at the
-// bottom of the list and the "New tag…" item of the "All tags" menu (the tree item's `menu`).
+// bottom of the list and the "New tag…" item of the "All tags" menu (the tree item's `menu`). On a computer a
+// tag row can be dragged onto a group row, which moves the tag into that group, or onto "All tags", which
+// takes it out of its group: the same move as "Move to group…" and "Remove from group" in its menu, with
+// the same confirmations. The group row under the drag is highlighted as a folder row under a tile.
 import {
   debounce,
   ItemView,
+  Platform,
   SearchComponent,
   setIcon,
   type App,
@@ -42,7 +46,9 @@ import {
   type TagTreeCounts,
   type TagTreeRow,
 } from '../../core/tags/tag-list.ts';
+import { tagDropGroup } from '../../core/tags/groups.ts';
 import { hasBubaDragData, isOwnTileDrag, readBubaDragPaths } from '../../platform/canvas-drag.ts';
+import { endTreeRowDrag, startTreeRowDrag, treeRowDrag } from '../../platform/tree-drag.ts';
 import { pathsVersionOf } from '../../platform/files/file-index.ts';
 import { vaultFileIndex } from '../../platform/files/vault-index.ts';
 import type { BubaAssets } from '../api.ts';
@@ -50,7 +56,7 @@ import { contrastClasses, tagDot } from '../color/dot.ts';
 import { RowMenus } from '../../platform/row-menus.ts';
 import { tagFiles } from './picker.ts';
 import { setListedTags } from './listed.ts';
-import { openNewTag, showGroupMenu, showTagMenu, type Exists } from './tag-menu.ts';
+import { moveTag, openNewTag, showGroupMenu, showTagMenu, type Exists } from './tag-menu.ts';
 import './tag-list.css';
 
 /** Expanded groups are device state, not vault data, so they live in local storage, like the device id. */
@@ -224,8 +230,26 @@ export function registerTagList(
       onChange,
       render: (containerEl) => renderTagList(containerEl, context),
       menu: (menu) => addNewTagItem(menu, context),
+      drop: {
+        accepts: (dt) => tagInto(dt, null) !== undefined,
+        drop: (dt) => dropTag(dt, null, context),
+      },
     }),
   );
+}
+
+/** The dragged tag, if a drop with `dt` moves it into `group` (`null`: out of its group); else `undefined`. */
+function tagInto(dt: DataTransfer | null, group: string | null): string | undefined {
+  const drag = treeRowDrag(dt);
+  return drag?.kind === 'tag' && tagDropGroup(drag.tag, group) !== undefined ? drag.tag : undefined;
+}
+
+/** A tag released on a group row or on "All tags": the move of its menu, with its confirmations. */
+function dropTag(dt: DataTransfer, group: string | null, context: ListContext): void {
+  const tag = tagInto(dt, group);
+  endTreeRowDrag();
+  const storage = context.storage();
+  if (tag !== undefined && storage) moveTag(context.app, storage, tag, group, context.exists);
 }
 
 /**
@@ -492,6 +516,21 @@ function drawGroup(
     const storage = context.storage();
     if (storage) showGroupMenu(context.app, storage, row.title, at, context.exists);
   });
+  self.addEventListener('dragover', (evt) => {
+    if (tagInto(evt.dataTransfer, row.title) === undefined || !evt.dataTransfer) return;
+    evt.preventDefault();
+    evt.dataTransfer.dropEffect = 'move';
+    self.addClass('is-being-dragged-over');
+  });
+  self.addEventListener('dragleave', (evt) => {
+    if (!self.contains(evt.relatedTarget as Node | null)) self.removeClass('is-being-dragged-over');
+  });
+  self.addEventListener('drop', (evt) => {
+    self.removeClass('is-being-dragged-over');
+    if (tagInto(evt.dataTransfer, row.title) === undefined || !evt.dataTransfer) return;
+    evt.preventDefault();
+    dropTag(evt.dataTransfer, row.title, context);
+  });
   return { children: row.expanded ? item.createDiv({ cls: 'tree-item-children' }) : listEl, flair, self };
 }
 
@@ -516,6 +555,14 @@ function drawTag(
     const storage = context.storage();
     if (storage) showTagMenu(context.app, storage, row.tag, at, context.exists);
   });
+  // On a phone a long press opens the menu with "Move to group…"; a draggable row would start a system drag.
+  if (!Platform.isMobile) {
+    self.draggable = true;
+    self.addEventListener('dragstart', (evt) =>
+      startTreeRowDrag(evt, { kind: 'tag', tag: row.tag }, 'tag', row.tag),
+    );
+    self.addEventListener('dragend', () => endTreeRowDrag());
+  }
   const accepts = (evt: DragEvent): boolean => hasBubaDragData(evt.dataTransfer);
   self.addEventListener('dragover', (evt) => {
     if (!accepts(evt) || !evt.dataTransfer) return;

@@ -2,6 +2,15 @@
 
 What changed in each release of Buba, in plain words. The newest release is at the top.
 
+## 1.0.2
+
+Fixes for the folder tree, and the basic folder and tag moves it was missing.
+
+- The arrow next to a folder now opens and closes it on every click, however fast you click, as in Obsidian's file explorer. Before, a quick second click was taken for half of a double click and did nothing. The same goes for the "All tags" row. A click on a folder name still shows its files, and a double click on the name still expands it.
+- A folder can now be renamed and deleted right in the Buba tree: "Rename…" and, last in red, "Delete" in its menu. Delete asks first with Obsidian's own question; if files inside are references of generations, Buba names them before anything is deleted. The Delete key does the same for the highlighted folder right after you click it in the tree. Before, both were only in Obsidian's own file explorer. When the folder you were looking at is deleted, the grid shows the folder it was in, instead of an empty page under the old name.
+- On a computer, drag a folder onto another folder to move it inside, from any level to any level; the folder under the pointer lights up. Drop it on "All files" or on the empty space below the folders to move it to the top level. An open folder stays open and highlighted at its new place, and Ctrl+Z in the grid moves it back.
+- Drag a tag onto a tag group to move it into the group, or onto "All tags" to take it out of its group, the same as "Move to group…" and "Remove from group" in its menu.
+
 ## 1.0.1
 
 Changes asked for by the Obsidian community review. Buba looks and works as before.

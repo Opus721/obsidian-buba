@@ -171,6 +171,23 @@ body:not(.is-grabbing) .buba-tree .tree-item-self.is-active:hover {
   color: var(--nav-item-color-active);
 }
 
+/* A row a folder or a tag would drop into (`is-being-dragged-over`: folders, groups, "All files", "All tags")
+   is marked by the background around it, the open folder's one, and not by Obsidian's text color: on a
+   colored folder or tag the text already has its own color, and Obsidian's 10 % accent background is lost
+   under a theme (word of the owner 25.10). The name keeps its color, as under the pointer. */
+.buba-tree .tree-item-self.is-being-dragged-over {
+  background-color: color-mix(
+    in oklch,
+    var(--mono-100) calc(6.7% + var(--buba-style-tree-active, 7%)),
+    transparent
+  );
+  color: var(--nav-item-color);
+}
+
+.buba-tree .tree-item-self.is-being-dragged-over .collapse-icon {
+  color: var(--nav-collapse-icon-color);
+}
+
 .buba-tree .tree-item-self.is-active .tree-item-flair {
   color: var(--text-muted);
 }

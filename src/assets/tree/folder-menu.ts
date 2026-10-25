@@ -5,9 +5,12 @@
 // `buba:folder-menu`, which puts the actions module's "Add files here…" (section `action-primary`) at the
 // very top; then "New subfolder…" and "New folder beside…" in section `action`, where Obsidian also puts
 // "Move folder to..." and "Bookmark..."; there is no bare "New folder" because Obsidian's creates inside.
+// "Rename…" follows them in the same section, as Obsidian's file explorer puts "Rename..." among its actions.
 // Then "Folder color…" and "Folder icon…" in section `view`, then the `file-menu` event with the folder,
 // source and tree leaf: Obsidian's and modules' folder items, as in Obsidian's file explorer and on a folder
-// tile in the grid. Plugins that color folders (Iconic, Notebook Navigator) add their items through the same
+// tile in the grid. "Delete" goes last, in red, after `file-menu`, so it is the bottom item as in the file
+// explorer and the tile menu; Obsidian adds neither "Rename" nor "Delete" to a plugin-built menu
+// (folder-actions.ts). Plugins that color folders (Iconic, Notebook Navigator) add their items through the same
 // event. Our items carry the "Buba" label (src/platform/menu-title.ts). "Folder color…" is the tag color
 // window (src/assets/color/picker.ts): fixed top row, the device's recent colors, the vault's pinned ones;
 // "Folder icon…" is the Lucide icon window (icon-picker.ts). The folder look is stored by path, taken from
@@ -23,6 +26,8 @@ import { t } from '../../core/i18n/dict/tree.ts';
 import { ownTitle } from '../../platform/menu-title.ts';
 import { openColorPicker } from '../color/picker.ts';
 import { showRowMenu, type RowMenuAt } from '../../platform/row-menus.ts';
+import type { PassportReader } from '../actions/menu-items.ts';
+import { deleteFolder, renameFolder } from './folder-actions.ts';
 import { FolderIconModal } from './icon-picker.ts';
 
 /** What the folder menu takes from storage: folder looks and the color window's pinned colors. */
@@ -48,7 +53,8 @@ const NEW_FOLDER_ITEMS = [
 
 /**
  * Folder row menu: the `buba:folder-menu` event, folder creation (`newFolder` opens the new folder name
- * dialog in the given folder), look items, then `file-menu` with source `source` and leaf `leaf`.
+ * dialog in the given folder) and "Rename…", look items, then `file-menu` with source `source` and leaf
+ * `leaf`, then "Delete"; `passports` lets the delete name references of generations inside.
  */
 export function showFolderMenu(
   app: App,
@@ -58,6 +64,7 @@ export function showFolderMenu(
   source: string,
   leaf: WorkspaceLeaf,
   newFolder: (parent: string) => void,
+  passports?: PassportReader,
 ): Menu {
   const menu = new Menu();
   app.workspace.trigger(FOLDER_MENU, menu, folder, source, leaf);
@@ -69,6 +76,13 @@ export function showFolderMenu(
         .setIcon(icon)
         .onClick(() => newFolder(newFolderParent(folder.path, place))),
     );
+  menu.addItem((item) =>
+    item
+      .setSection('action')
+      .setTitle(ownTitle(t('renameFolderItem')))
+      .setIcon('pencil')
+      .onClick(() => renameFolder(app, folder)),
+  );
   if (storage) {
     menu.addItem((item) =>
       item
@@ -86,6 +100,14 @@ export function showFolderMenu(
     );
   }
   app.workspace.trigger('file-menu', menu, folder, source, leaf);
+  menu.addItem((item) =>
+    item
+      .setSection('danger')
+      .setTitle(ownTitle(t('deleteFolderItem')))
+      .setIcon('trash-2')
+      .setWarning(true)
+      .onClick(() => void deleteFolder(app, folder, passports)),
+  );
   return showRowMenu(menu, at);
 }
 

@@ -1,5 +1,5 @@
 // Name of a new folder from the Buba tree dialogs ("New subfolder…", "New folder alongside…", "New folder…"
-// and the "+ New folder" row): user input. Character rules are `safeFileName`, as for renaming a file
+// and the "+ New folder" row) and of a renamed one ("Rename…" in the folder menu): user input. Character rules are `safeFileName`, as for renaming a file
 // (rename.ts): the name never leads outside the folder and has no characters Windows rejects. An unsuitable
 // name is refused with a reason, not silently fixed. Clashes ignore case: Windows and iPhone disks do not
 // tell "Lamp" from "lamp", and Obsidian answers "Folder already exists."; the file rename dialog counts the
@@ -27,6 +27,12 @@ export function newFolderParent(folder: string, place: NewFolderPlace): string {
   if (place === 'inside' || folder === ROOT) return folder;
   const slash = folder.lastIndexOf('/');
   return slash > 0 ? folder.slice(0, slash) : ROOT;
+}
+
+/** Parent folder of `path`: `ROOT` for a folder in the vault root. */
+export function parentFolder(path: string): string {
+  const slash = path.lastIndexOf('/');
+  return slash > 0 ? path.slice(0, slash) : ROOT;
 }
 
 /** Path of `name` in `parent`: no slash at the root, like Obsidian paths. */
@@ -68,4 +74,17 @@ export function newFolderTarget(parent: string, input: string, siblings: readonl
     return { ok: false, why };
   }
   return { ok: true, path: childPath(parent, name), name };
+}
+
+/**
+ * New path of folder `path` renamed to `input`, by the rule for a new folder in its parent. `siblings` are
+ * the names of everything else in the parent: the folder's own name is left out, so changing only the case
+ * is allowed. The same name gives the same path, and there is nothing to rename.
+ */
+export function renameFolderTarget(
+  path: string,
+  input: string,
+  siblings: readonly string[],
+): NewFolderTarget {
+  return newFolderTarget(parentFolder(path), input, siblings);
 }

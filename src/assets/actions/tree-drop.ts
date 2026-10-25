@@ -3,15 +3,20 @@
 // drag events on folder rows `[data-path]` are delegated on the document of every Obsidian window; the
 // highlight is the `is-being-dragged-over` class the native file explorer uses for the folder under a drop,
 // drawn by the theme. Only tiles from this vault are moved. Files from the file manager dropped on the same
-// row are copied into the folder by the same write and report as a drop on the grid (`importInto`); the core
-// rule `treeDrop` decides what to do with a drop. Other drags are left alone.
-import { Notice, type App, type Plugin } from 'obsidian';
+// row are copied into the folder by the same write and report as a drop on the grid (`importInto`). A folder
+// dragged from the tree (src/platform/tree-drag.ts) is moved by the same batch move into the folder under it,
+// at its place by name, as in Obsidian's file explorer; into the vault root over "All files" and the empty
+// space (`moveFolder`, called by the tree). The core rule `treeDrop` decides what to do with a drop.
+// Other drags are left alone.
+import { Notice, type App, type Plugin, type TAbstractFile } from 'obsidian';
 import { t } from '../../core/i18n/dict/actions.ts';
+import { ROOT } from '../../core/actions/new-folder.ts';
 import { treeDrop, type TreeDropTarget } from '../../core/actions/tree-drop.ts';
 import { hasBubaDragData, readBubaDragPaths } from '../../platform/canvas-drag.ts';
 import { readDropped } from '../../platform/files/import.ts';
 import { moveFiles } from '../../platform/files/move.ts';
 import { recordMoves } from '../../platform/files/undo.ts';
+import { endTreeRowDrag, treeRowDrag } from '../../platform/tree-drag.ts';
 import type { BubaAssets } from '../api.ts';
 import { importInto } from './import-drop.ts';
 import { confirmLinkUpdates } from './links-setting.ts';
@@ -54,6 +59,12 @@ export function registerTreeDrop(plugin: Plugin, _assets: BubaAssets): void {
         void importInto(app, target.folder, readDropped(dt));
         return;
       }
+      const folder = treeRowDrag(dt);
+      if (folder?.kind === 'folder') {
+        endTreeRowDrag();
+        void moveFolder(app, folder.path, target.folder);
+        return;
+      }
       const paths = isOwnTileDrag(dt) ? (readBubaDragPaths(dt) ?? []) : null;
       void dropInto(app, target.folder, paths);
     },
@@ -68,8 +79,10 @@ function dropTarget(app: App, evt: DragEvent): (TreeDropTarget & { row: HTMLElem
   const dt = evt.dataTransfer;
   if (!dt) return null;
   const row = folderRow(app, evt.target);
+  const drag = treeRowDrag(dt);
+  if (drag && drag.kind !== 'folder') return null;
   const target = treeDrop(
-    { buba: hasBubaDragData(dt), files: dt.types.includes('Files') },
+    { buba: hasBubaDragData(dt), files: dt.types.includes('Files'), folder: drag?.path ?? null },
     row?.dataset.path ?? null,
   );
   return target && row ? { ...target, row } : null;
@@ -103,6 +116,32 @@ async function dropInto(app: App, folder: string, paths: string[] | null): Promi
     console.error('Buba: move into folder', error);
     new Notice(t('moveFailedJournal'));
   }
+}
+
+/**
+ * Moves folder `path` into `to` (a folder path or `ROOT`) by the same batch move as tiles: the links dialog
+ * counts links to the files inside, the move is one undo step. Success is silent, as in Obsidian's file
+ * explorer: the folder shows at its new place, and if it was open the grid and the tree follow it. A refusal
+ * (the name is taken there) or a failure gets the batch notice with the reason.
+ */
+export async function moveFolder(app: App, path: string, to: string): Promise<void> {
+  const folder = app.vault.getFolderByPath(path);
+  if (!folder || !(await confirmLinkUpdates(app, filesIn(folder)))) return;
+  try {
+    const result = await moveFiles(app, [path], to);
+    recordMoves(app, result.moved, to);
+    if (result.moved.length) return;
+    moveNotice(to === ROOT ? t('nothingMovedToRoot') : t('nothingMovedInto', { folder: to }), result);
+  } catch (error) {
+    console.error('Buba: folder not moved', error);
+    new Notice(t('moveFailedJournal'));
+  }
+}
+
+/** Paths of all files inside a folder, at any depth. */
+function filesIn(folder: TAbstractFile): string[] {
+  const children = (folder as { children?: TAbstractFile[] }).children;
+  return children ? children.flatMap((child) => ('children' in child ? filesIn(child) : [child.path])) : [];
 }
 
 /** Handlers on the document of every Obsidian window, including later ones, like the grid's `onGridEvent`. */

@@ -31,6 +31,13 @@ const en = {
   folderNameTaken: "Couldn't create folder “{name}”: this name is already taken here",
   folderCreateFailed: "Couldn't create folder “{name}”",
 
+  renameFolderItem: 'Rename…',
+  renameFolderTitle: 'Rename folder “{name}”',
+  renameButton: 'Rename',
+  folderRenameFailed: "Couldn't rename folder “{name}”",
+  deleteFolderItem: 'Delete',
+  folderDeleteFailed: "Couldn't delete folder “{name}” — see the console for details",
+
   folderColorItem: 'Folder color…',
   folderIconItem: 'Folder icon…',
   folderColorTitle: 'Color of folder “{name}”',
@@ -77,6 +84,13 @@ export const strings: Dictionary<typeof en> = {
     name: 'Имя',
     folderNameTaken: 'Папка «{name}» не создана: такое имя здесь уже занято',
     folderCreateFailed: 'Папку «{name}» создать не удалось',
+
+    renameFolderItem: 'Переименовать…',
+    renameFolderTitle: 'Переименовать папку «{name}»',
+    renameButton: 'Переименовать',
+    folderRenameFailed: 'Папку «{name}» переименовать не удалось',
+    deleteFolderItem: 'Удалить',
+    folderDeleteFailed: 'Папку «{name}» удалить не удалось — подробности в консоли',
 
     folderColorItem: 'Цвет папки…',
     folderIconItem: 'Иконка папки…',

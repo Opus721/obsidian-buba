@@ -323,9 +323,15 @@ function groupsToPick(app: App, storage: TagStorage): GroupInfo[] {
  * Moves a tag into group `group` (`null` to remove it from a group) by renaming. A merge with an existing tag
  * and removing siblings in an exclusive group share one confirmation, one line each. Merge vs. rename is
  * decided over all index records (`planRename`); the target tag's file count follows the "All tags" list,
- * existing files only.
+ * existing files only. Also the drop of a dragged tag on a group row or on "All tags" (tag-list.ts).
  */
-function moveTag(app: App, storage: TagStorage, tag: string, group: string | null, exists: Exists): void {
+export function moveTag(
+  app: App,
+  storage: TagStorage,
+  tag: string,
+  group: string | null,
+  exists: Exists,
+): void {
   const plan = planRename(tag, groupedName(tag, group), storage.allTags());
   if (plan.kind === 'refuse') {
     new Notice(plan.reason);

@@ -42,3 +42,13 @@ export function groupedName(tag: string, group: string | null): string {
   const into = group === null ? null : normalizeTag(group);
   return into === null ? name : `${into}/${name}`;
 }
+
+/**
+ * Group a tag dragged in the "All tags" tree goes to: `group` when dropped on that group's row, `null` (out of
+ * any group) when dropped on "All tags"; `undefined` when it is already there and nothing changes, so the row
+ * is not highlighted. Groups compare by `tagKey`, as everywhere.
+ */
+export function tagDropGroup(tag: string, group: string | null): string | null | undefined {
+  const into = group === null ? null : tagKey(group);
+  return groupKey(tag) === into ? undefined : group;
+}

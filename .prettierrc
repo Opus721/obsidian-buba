@@ -1,1 +1,7 @@
-{ "singleQuote": true, "printWidth": 110 }
+{
+  "singleQuote": true,
+  "printWidth": 110,
+  "overrides": [
+    { "files": ["README.md", "CHANGELOG.md", "skills/**/*.md"], "options": { "proseWrap": "never" } }
+  ]
+}

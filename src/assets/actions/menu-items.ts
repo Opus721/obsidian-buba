@@ -267,6 +267,20 @@ export function confirmDeleteFiles(
 }
 
 /**
+ * Asks to delete folder `name` whose `files` include references of generations (`uses`): the reference
+ * dialog in its batch form, titled with the folder. `true` on "Delete"; the caller deletes the folder.
+ */
+export function confirmDeleteFolder(
+  app: App,
+  name: string,
+  files: readonly TFile[],
+  uses: readonly ReferenceUse[],
+  passports: PassportReader,
+): Promise<boolean> {
+  return new Promise((done) => new ReferenceDeleteModal(app, files, uses, passports, done, name).open());
+}
+
+/**
  * Batch confirmation with the file count, like Obsidian's delete dialog: Cancel, then a red "Delete". It
  * mimics Obsidian's confirmation dialog: `mod-confirmation` on `containerEl` and `mod-cancel` on Cancel, as
  * Obsidian's `ConfirmationModal` and `setCancel` set them (both exist only since 1.13, and the plugin also
@@ -336,13 +350,15 @@ const LISTED = 5;
  * section. A batch: the file count, how many are references in how many generations, up to five reference
  * names (a name shows its "Used in generations"). Then what happens to those generations and where the
  * files go. "Delete" trashes them with `trashFile` and one undo step, as the batch dialog does; without
- * `done` it deletes them itself.
+ * `done` it deletes them itself. With `folder` it asks about deleting that folder (the Buba tree's
+ * "Delete"): the batch form with the folder name in the title and its file count.
  */
 class ReferenceDeleteModal extends Modal {
   readonly #files: readonly TFile[];
   readonly #uses: readonly ReferenceUse[];
   readonly #passports: PassportReader;
   readonly #done: (confirmed: boolean) => void;
+  readonly #folder: string | null;
   #confirmed = false;
   #buttons: HTMLElement | null = null;
 
@@ -354,19 +370,21 @@ class ReferenceDeleteModal extends Modal {
     done: (confirmed: boolean) => void = (confirmed) => {
       if (confirmed) void trashFiles(app, files);
     },
+    folder: string | null = null,
   ) {
     super(app);
     this.#files = files;
     this.#uses = uses;
     this.#passports = passports;
     this.#done = done;
+    this.#folder = folder;
     this.containerEl.addClass('mod-confirmation');
   }
 
   override onOpen(): void {
     const { contentEl } = this;
     const [only] = this.#files;
-    const one = this.#files.length === 1 && only ? only : null;
+    const one = this.#files.length === 1 && only && this.#folder === null ? only : null;
     const count = generationCount(this.#uses);
     if (one) {
       this.setTitle(t('deleteRefTitle', { name: one.name }));
@@ -379,9 +397,14 @@ class ReferenceDeleteModal extends Modal {
           return { text: model ? `${name} · ${model}` : name, path, section: GENERATION_SECTION };
         }),
       );
+    } else if (this.#folder !== null) {
+      this.setTitle(t('deleteFolderTitle', { name: this.#folder }));
+      contentEl.createEl('p', { text: t('folderFilesCount', { count: this.#files.length }) });
     } else {
       this.setTitle(t('deleteFilesTitle'));
       contentEl.createEl('p', { text: t('deleteFilesConfirm', { count: this.#files.length }) });
+    }
+    if (!one) {
       contentEl.createEl('p', {
         text: `${t('refsInBatch', { count: this.#uses.length })} ${t('inGenerations', { count })}`,
       });

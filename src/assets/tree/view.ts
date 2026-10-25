@@ -11,8 +11,13 @@
 // (create-folder.ts). The header has the buttons of Obsidian's file explorer: "Sort order" (by name A to Z
 // and Z to A, at all levels, kept in the leaf state) and "Collapse/Expand all". The row of the folder shown
 // by the main grid has Obsidian's tree class `is-active`, like the open file in the file explorer; with
-// "Reveal the open folder in the tree" on, the tree expands its parents and scrolls to it. Layout uses
-// Obsidian's tree classes; names are text only, and a color goes into `style` only after the pattern check.
+// "Reveal the open folder in the tree" on, the tree expands its parents and scrolls to it. On a computer a
+// folder row can be dragged onto another folder row, "All files" or the empty space below the folders: the
+// folder moves there (src/assets/actions/tree-drop.ts); an item with `drop` takes drops on its row.
+// Delete deletes the highlighted folder after a confirmation while the last press was on a folder row, as in
+// Eagle and file managers: the click opens the grid, yet the key belongs to the tree (folder-actions.ts).
+// Layout uses Obsidian's tree classes; names are text only, and a color goes into `style` only after the
+// pattern check.
 import {
   getIcon,
   ItemView,
@@ -38,11 +43,16 @@ import type { FileIndex } from '../../platform/files/file-index.ts';
 import { iconButton } from '../../platform/icon-button.ts';
 import { vaultFileIndex } from '../../platform/files/vault-index.ts';
 import { settingsOf } from '../../platform/settings.ts';
-import type { BubaAssets, TreeItem } from '../api.ts';
+import type { BubaAssets, TreeItem, TreeItemDrop } from '../api.ts';
 import { contrastClasses } from '../color/dot.ts';
 import { openGrid } from '../index.ts';
+import { passportStorage } from '../../platform/passports.ts';
 import { RowMenus, showRowMenu, type MenuAt, type RowMenuAt } from '../../platform/row-menus.ts';
+import { endTreeRowDrag, startTreeRowDrag } from '../../platform/tree-drag.ts';
+import { isTypingTarget } from '../../core/tags/keys.ts';
+import { nameOf } from '../../platform/files/file-index.ts';
 import { addNewFolderItem, drawNewFolderRow, openNewFolder } from './create-folder.ts';
+import { deleteFolder } from './folder-actions.ts';
 import { showFolderMenu, type FolderLookStorage } from './folder-menu.ts';
 import {
   collapseAll,
@@ -102,6 +112,8 @@ const FOLDER_ROW = '.tree-item-self[data-path]';
 const SPACE = 'buba-tree-space';
 /** Selected row: Obsidian's active tree item class (`.tree-item-self.is-active`: background and color). */
 const ACTIVE = 'is-active';
+/** Row under a drop: the class Obsidian's file explorer puts on the folder under a drag, drawn by the theme. */
+const OVER = 'is-being-dragged-over';
 /** Order button and menu items use the file explorer's wording minus "file": the tree has only folders. */
 const ORDER_TITLES = {
   alphabetical: 'orderAlphabetical',
@@ -154,6 +166,10 @@ export class TreeView extends ItemView {
   readonly #menus = new RowMenus();
   /** The empty-space menu has its own touch state: rows do not trigger it (the `SPACE` mark). */
   readonly #spaceMenus = new RowMenus();
+  /** Whose Delete it is: the folder whose row name took the last press in the window, or `null` for the grid. */
+  #keys: string | null = null;
+  /** Item row highlighted under a drag. */
+  #lit: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: Plugin, assets: BubaAssets) {
     super(leaf);
@@ -206,6 +222,8 @@ export class TreeView extends ItemView {
     this.#listenFolders(this.#foldersEl);
     drawNewFolderRow(this.contentEl, () => this.#newFolder(ROOT));
     this.#listenSpace();
+    this.#listenSpaceDrop();
+    this.#listenDelete();
     this.register(this.#assets.onChange(() => this.#schedule('items')));
     this.register(this.#index.onChange(() => this.#schedule('folders')));
     // Folder looks have their own storage channel: tag edits do not wake the tree.
@@ -275,15 +293,19 @@ export class TreeView extends ItemView {
       const flair = item.count ? this.#flair(self, item.count()) : null;
       const row: ItemRow = { item, el, arrow, flair, children: null, cleanup: null, off: null };
       if (flair && item.onChange) row.off = item.onChange(() => this.#schedule('counts'));
+      // The arrow, and the whole row of an item without a grid ("All tags"), toggles on every click, as in
+      // Obsidian's file explorer; on the name the second click of a double click does not open the grid
+      // again, the `dblclick` below expands.
       self.addEventListener('click', (evt) => {
-        if (evt.detail > 1 || (item.menu && !this.#menus.click())) return;
+        if (item.menu && !this.#menus.click()) return;
         if (arrow?.contains(evt.target as Node) || !item.source) this.#toggleItem(row);
-        else void this.#assets.openGrid(item.source);
+        else if (evt.detail <= 1) void this.#assets.openGrid(item.source);
       });
       self.addEventListener('dblclick', (evt) => {
         if (item.source && arrow && !arrow.contains(evt.target as Node)) this.#toggleItem(row);
       });
       if (item.menu) this.#listenMenu(self, item);
+      if (item.drop) this.#listenDrop(self, item.drop);
       this.#items.push(row);
       this.#showItem(row, this.#openItems.has(item.id));
     }
@@ -300,6 +322,115 @@ export class TreeView extends ItemView {
       item.menu?.(menu);
       showRowMenu(menu, at);
     });
+  }
+
+  /**
+   * Item drop (`drop`): the row is highlighted while it takes what is dragged over it, as a folder row under
+   * a tile; the item decides and does the rest.
+   */
+  #listenDrop(self: HTMLElement, drop: TreeItemDrop): void {
+    self.addEventListener('dragover', (evt) => this.#overDrop(evt, self, drop));
+    self.addEventListener('dragleave', (evt) => {
+      if (!self.contains(evt.relatedTarget as Node | null)) this.#light(null);
+    });
+    self.addEventListener('drop', (evt) => this.#dropOn(evt, drop));
+  }
+
+  #overDrop(evt: DragEvent, self: HTMLElement, drop: TreeItemDrop): void {
+    const dt = evt.dataTransfer;
+    if (!dt || !drop.accepts(dt)) return this.#light(null);
+    evt.preventDefault();
+    dt.dropEffect = 'move';
+    this.#light(self);
+  }
+
+  #dropOn(evt: DragEvent, drop: TreeItemDrop): void {
+    this.#light(null);
+    const dt = evt.dataTransfer;
+    if (!dt || !drop.accepts(dt)) return;
+    evt.preventDefault();
+    drop.drop(dt);
+  }
+
+  #light(row: HTMLElement | null): void {
+    if (this.#lit === row) return;
+    this.#lit?.removeClass(OVER);
+    this.#lit = row;
+    row?.addClass(OVER);
+  }
+
+  /**
+   * The empty space of the tree (the field, the folder block, the "+ New folder" row) takes a drop for the
+   * item whose `drop` has `space`, highlighting that item's row: a folder dropped below the folders goes to
+   * the vault root, shown on "All files".
+   */
+  #listenSpaceDrop(): void {
+    const field = this.contentEl;
+    const spaceItem = (evt: DragEvent): ItemRow | null => {
+      const at = evt.target as Element | null;
+      const space = at === field || at === this.#foldersEl || !!at?.closest?.('.buba-tree-new');
+      return space ? (this.#items.find((row) => row.item.drop?.space) ?? null) : null;
+    };
+    field.addEventListener('dragover', (evt) => {
+      const row = spaceItem(evt);
+      if (row?.item.drop) this.#overDrop(evt, row.el.firstElementChild as HTMLElement, row.item.drop);
+      else if (this.#foldersEl?.contains(evt.target as Node | null)) this.#light(null);
+    });
+    field.addEventListener('dragleave', (evt) => {
+      if (!field.contains(evt.relatedTarget as Node | null)) this.#light(null);
+    });
+    field.addEventListener('drop', (evt) => {
+      const row = spaceItem(evt);
+      if (row?.item.drop) this.#dropOn(evt, row.item.drop);
+    });
+    field.addEventListener('dragend', () => {
+      this.#light(null);
+      endTreeRowDrag();
+    });
+  }
+
+  /**
+   * Delete on the highlighted folder, with the confirmation of "Delete" in its menu. The key is the tree's
+   * while the last press in the window was a left press on the name of the highlighted folder's row: a click
+   * there opens the grid and moves focus to it, as before, yet the user's attention is on the tree, as in
+   * Eagle. A press on the arrow or on another row that did not open it, or a drag that moved it, leaves the
+   * key with the grid: the press is remembered by path and must match the highlight. A press anywhere else
+   * gives the key back; it is ignored in a text field, during input composition, with a modifier, while a
+   * dialog or a menu is open, and after a delete. Listened in the capture phase, before the grid's own Delete.
+   */
+  #listenDelete(): void {
+    const win = this.contentEl.win;
+    this.registerDomEvent(
+      win,
+      'pointerdown',
+      (evt) => {
+        const at = evt.target as Element | null;
+        const row =
+          evt.button === 0 && this.contentEl.contains(at) ? at?.closest?.<HTMLElement>(FOLDER_ROW) : null;
+        this.#keys = row && !at?.closest('.collapse-icon') ? (row.dataset.path ?? null) : null;
+      },
+      { capture: true },
+    );
+    this.registerDomEvent(
+      win,
+      'keydown',
+      (evt) => {
+        if (this.#keys === null || this.#keys !== this.#active || evt.key !== 'Delete') return;
+        if (evt.isComposing || evt.keyCode === 229) return;
+        if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey) return;
+        const doc = this.contentEl.doc;
+        if (isTypingTarget(evt.target as Element | null)) return;
+        if (doc.body.querySelector('.modal-container, .menu')) return;
+        const folder = this.app.vault.getFolderByPath(this.#keys);
+        if (!folder) return;
+        evt.preventDefault();
+        evt.stopPropagation();
+        if (evt.repeat) return;
+        this.#keys = null;
+        void deleteFolder(this.app, folder, passportStorage(this.#plugin));
+      },
+      { capture: true },
+    );
   }
 
   #unmountItems(): void {
@@ -387,6 +518,9 @@ export class TreeView extends ItemView {
       parents.length = row.depth + 1;
       const el = parents[row.depth]!.createDiv({ cls: 'tree-item' });
       const self = el.createDiv({ cls: 'tree-item-self is-clickable', attr: { 'data-path': row.path } });
+      // On a phone a long press opens the menu, and "Move folder to..." moves; a draggable row would start a
+      // system drag on iOS instead, as with tiles (src/assets/actions/tile-drag.ts).
+      if (!Platform.isMobile) self.draggable = true;
       this.#selves.push(self);
       if (row.hasChildren) this.#arrow(self).toggleClass('is-collapsed', !row.expanded);
       const icon: FolderIcon = {
@@ -464,13 +598,24 @@ export class TreeView extends ItemView {
     container.addEventListener('click', (evt) => {
       const hit = target(evt);
       // A click after a long press (the menu is already shown) or a finger move does not open the folder.
-      if (!hit || evt.detail > 1 || !this.#menus.click()) return;
+      if (!hit || !this.#menus.click()) return;
+      // The arrow toggles on every click, as in Obsidian's file explorer: a click within the double-click
+      // time is the second of a series (`detail` 2), and dropping it left the folder as it was. On the name
+      // the second click does not open the grid again, the `dblclick` below expands.
       if (hit.onArrow) this.#toggleFolder(hit.path);
-      else void openGrid(this.#plugin, hit.path);
+      else if (evt.detail <= 1) void openGrid(this.#plugin, hit.path);
     });
     container.addEventListener('dblclick', (evt) => {
       const hit = target(evt);
       if (hit && !hit.onArrow && hit.self.hasClass('mod-collapsible')) this.#toggleFolder(hit.path);
+    });
+    // A folder row drag: the ghost shows the row's icon and name; drops are taken by folder rows
+    // (src/assets/actions/tree-drop.ts) and by "All files" and the empty space (`#listenSpaceDrop`).
+    container.addEventListener('dragstart', (evt) => {
+      const hit = target(evt);
+      if (!hit) return;
+      const icon = this.#icons[this.#rows.findIndex((row) => row.path === hit.path)]?.icon || 'folder';
+      startTreeRowDrag(evt, { kind: 'folder', path: hit.path }, icon, nameOf(hit.path));
     });
   }
 
@@ -478,8 +623,15 @@ export class TreeView extends ItemView {
   #folderMenu(at: RowMenuAt): void {
     const folder = this.app.vault.getFolderByPath(at.row.dataset.path ?? '');
     if (folder)
-      showFolderMenu(this.app, this.#storage(), folder, at, TREE_VIEW_TYPE, this.leaf, (parent) =>
-        this.#newFolder(parent),
+      showFolderMenu(
+        this.app,
+        this.#storage(),
+        folder,
+        at,
+        TREE_VIEW_TYPE,
+        this.leaf,
+        (parent) => this.#newFolder(parent),
+        passportStorage(this.#plugin),
       );
   }
 
@@ -661,11 +813,16 @@ export class TreeView extends ItemView {
 
   // Expansion is kept by path: a renamed or moved folder takes it along, as in Obsidian's file explorer.
   // Files do not change expansion; `rename` also fires for every nested file.
+  // The open folder stays highlighted at its new place: a folder dragged into a collapsed one would otherwise
+  // vanish from view, so its new parents are expanded and the tree scrolls to it.
   #renamed(file: TAbstractFile, oldPath: string): void {
     if (!(file instanceof TFolder)) return;
     this.#expanded = renameExpanded(this.#expanded, oldPath, file.path);
-    if (this.#active !== null) this.#active = movedPath(this.#active, oldPath, file.path);
-    this.#saveFolders();
+    const active = this.#active === null ? null : movedPath(this.#active, oldPath, file.path);
+    if (active !== null && active !== this.#active) {
+      this.#active = active;
+      this.#revealRow(active);
+    } else this.#saveFolders();
   }
 
   // Obsidian saves the layout itself only when it creates the view, so state changes are saved explicitly.

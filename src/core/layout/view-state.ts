@@ -178,6 +178,19 @@ export function renameGridFolder(state: GridViewState, from: string, to: string)
 }
 
 /**
+ * State after folder `deleted` is deleted from the Buba tree: if the open folder is it or inside it, the grid
+ * goes to the deleted folder's parent, the way Eagle leaves a deleted folder; `source` and the look stay. "All
+ * files", the root and an unaffected folder return the same object.
+ */
+export function deleteGridFolder(state: GridViewState, deleted: string): GridViewState {
+  const { folder } = state;
+  if (folder === null || folder === '/') return state;
+  if (folder !== deleted && !folder.startsWith(`${deleted}/`)) return state;
+  const at = deleted.lastIndexOf('/');
+  return { ...state, folder: at < 0 ? '/' : deleted.slice(0, at) };
+}
+
+/**
  * A history step's folder under its current name: as is if it exists; otherwise it is carried through
  * the `[from, to]` renames in order, the way `FileView.onRename` follows an open file. "All files" and
  * the root stay as is.

@@ -56,6 +56,8 @@ const en = {
 
   // Deleting references of generations: the file stays named in their passports.
   deleteRefTitle: 'Delete "{name}"?',
+  deleteFolderTitle: 'Delete folder "{name}"?',
+  folderFilesCount: { one: 'It holds {count} file.', other: 'It holds {count} files.' },
   refOfGenerations: {
     one: 'This file is a reference in {count} generation.',
     other: 'This file is a reference in {count} generations.',
@@ -86,6 +88,7 @@ const en = {
   otherVaultTiles: "Tiles from another Obsidian vault can't be moved here",
   movedInto: { one: 'Moved to "{folder}": {count} file', other: 'Moved to "{folder}": {count} files' },
   nothingMovedInto: 'Nothing moved to "{folder}"',
+  nothingMovedToRoot: 'Nothing moved to the vault root',
   moveFailedJournal:
     "Move failed: the Buba action log wasn't written — see the developer console for details",
   moveFinished: { one: 'Move finished: {count} file', other: 'Move finished: {count} files' },
@@ -276,6 +279,13 @@ export const strings: Dictionary<ActionsSource> = {
     trashNoneOne: 'Файл будет удалён безвозвратно.',
 
     deleteRefTitle: 'Удалить «{name}»?',
+    deleteFolderTitle: 'Удалить папку «{name}»?',
+    folderFilesCount: {
+      one: 'В ней {count} файл.',
+      few: 'В ней {count} файла.',
+      many: 'В ней {count} файлов.',
+      other: 'В ней {count} файла.',
+    },
     refOfGenerations: {
       one: 'Этот файл — референс в {count} генерации.',
       few: 'Этот файл — референс в {count} генерациях.',
@@ -323,6 +333,7 @@ export const strings: Dictionary<ActionsSource> = {
       other: 'Перенесено в «{folder}»: {count} файла',
     },
     nothingMovedInto: 'В «{folder}» ничего не перенесено',
+    nothingMovedToRoot: 'В корень хранилища ничего не перенесено',
     moveFailedJournal:
       'Перенос не удался: журнал действий Buba не записался — подробности в консоли разработчика',
     moveFinished: {

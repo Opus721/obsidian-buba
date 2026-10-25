@@ -68,6 +68,18 @@ export interface TreeItem {
    * is shown.
    */
   menu?(menu: Menu): void;
+  /** Takes drops on the item's row. */
+  drop?: TreeItemDrop;
+}
+
+/** What a tree item does with a drag released on its row. */
+export interface TreeItemDrop {
+  /** In `dragover`, when drag data is hidden: whether a drop here does something; the row is highlighted. */
+  accepts(dt: DataTransfer): boolean;
+  /** The drag was released on the row. */
+  drop(dt: DataTransfer): void;
+  /** Also takes drops on the tree's empty space below the folders, highlighting this row. */
+  space?: boolean;
 }
 
 export interface SortKeyDef {
