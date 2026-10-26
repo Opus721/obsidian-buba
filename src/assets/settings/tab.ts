@@ -3,6 +3,8 @@
 // Obsidian components. The order follows Obsidian's plugin settings guidelines (Plugins → User interface
 // → Settings): general rows on top without a heading, then "Appearance", "Language and region" and "What
 // Obsidian needs"; each description is one sentence about what changes, only the keys row has a list.
+// "Appearance" is split by small grey subheadings ("Folder and tag trees", "Grid tiles", "Menus"; word of the
+// owner 26.10: one heading for the look, smaller ones inside; Obsidian groups do not nest).
 // "Appearance" applies at once: after the write, classes go on `body` (src/platform/tree-look.ts). Our only
 // own style is the dropdown width (settings.css).
 import {
@@ -21,6 +23,11 @@ import {
   normalizeSettings,
   TREE_LINES_OPACITY,
   type BubaSettings,
+  type FileTile,
+  type FolderCover,
+  type FolderPlate,
+  type FolderSelect,
+  type FolderTile,
   type TreeLines,
 } from '../../core/settings/settings.ts';
 import { coreSetting, enableCoreSetting, setCoreSetting } from '../../platform/core-settings.ts';
@@ -80,7 +87,20 @@ const AUTO_REVEAL = row('autoReveal', 'autoRevealDesc');
 // Group headings are the `group…` keys, without the word "settings", per Obsidian's heading guideline.
 // "Language and region" is how Buba writes dates and times: a choice of its own, not Obsidian's language.
 
-/** "Appearance" rows: shared by the folder and tag trees and by all devices. */
+/**
+ * A subheading inside "Appearance": Obsidian's heading row, smaller and grey (settings.css), left out of
+ * search, where the rows show without it.
+ */
+const subheading = (name: string) => ({
+  name,
+  searchable: false,
+  render: (setting: Setting) => {
+    setting.setHeading();
+    setting.settingEl.addClass('buba-setting-subheading');
+  },
+});
+
+/** "Folder and tag trees" rows: shared by both trees and by all devices. */
 const TREE_LINES_ROW = row('treeLines', 'treeLinesDesc');
 const treeLinesOptions = (): Record<TreeLines, string> => ({
   off: t('treeLinesOff'),
@@ -91,6 +111,41 @@ const TREE_OPACITY_ROW = row('treeOpacity', 'treeOpacityDesc');
 const TREE_ARROW_ROW = row('treeArrow', 'treeArrowDesc');
 const FOLDER_NAME_ROW = row('folderName', 'folderNameDesc');
 const TAG_NAME_ROW = row('tagName', 'tagNameDesc');
+/** Long names on one line with "…"; off means they wrap. */
+const NAME_ONE_LINE_ROW = row('nameOneLine', 'nameOneLineDesc');
+/** Folder tile in the grid: with the files inside it or without. */
+const FOLDER_TILE_ROW = row('folderTile', 'folderTileDesc');
+const folderTileOptions = (): Record<FolderTile, string> => ({
+  peek: t('folderTilePeek'),
+  solid: t('folderTileSolid'),
+});
+/** Folder cover in the grid: behind under glass, or in front. */
+const FOLDER_COVER_ROW = row('folderCover', 'folderCoverDesc');
+const folderCoverOptions = (): Record<FolderCover, string> => ({
+  back: t('folderCoverBack'),
+  front: t('folderCoverFront'),
+});
+/** Back plate behind a cover in front: grey or the cover's color. */
+const FOLDER_PLATE_ROW = row('folderPlate', 'folderPlateDesc');
+const folderPlateOptions = (): Record<FolderPlate, string> => ({
+  grey: t('folderPlateGrey'),
+  cover: t('folderPlateCover'),
+});
+/** Selected folder tile: a line around the front, a tinted area or a framed area. */
+const FOLDER_SELECT_ROW = row('folderSelect', 'folderSelectDesc');
+const folderSelectOptions = (): Record<FolderSelect, string> => ({
+  front: t('folderSelectFront'),
+  fill: t('folderSelectFill'),
+  frame: t('folderSelectFrame'),
+});
+
+/** File without a picture in the grid: silhouette, square plate or small silhouette. */
+const FILE_TILE_ROW = row('fileTile', 'fileTileDesc');
+const fileTileOptions = (): Record<FileTile, string> => ({
+  shape: t('fileTileShape'),
+  plate: t('fileTilePlate'),
+  small: t('fileTileSmall'),
+});
 /** "Buba" label in menus: the word "Buba" to the right of our menu items; off means no label. */
 const MENU_OWN_ROW = row('menuOwn', 'menuOwnDesc');
 
@@ -153,6 +208,7 @@ export class BubaSettingTab extends PluginSettingTab {
         type: 'group',
         heading: t('groupLook'),
         items: [
+          subheading(t('groupTree')),
           {
             ...TREE_LINES_ROW(),
             control: {
@@ -194,6 +250,61 @@ export class BubaSettingTab extends PluginSettingTab {
               defaultValue: DEFAULT_SETTINGS.treeTagNameColor,
             },
           },
+          {
+            ...NAME_ONE_LINE_ROW(),
+            control: {
+              type: 'toggle',
+              key: 'treeNameOneLine',
+              defaultValue: DEFAULT_SETTINGS.treeNameOneLine,
+            },
+          },
+          subheading(t('groupTiles')),
+          {
+            ...FOLDER_TILE_ROW(),
+            control: {
+              type: 'dropdown',
+              key: 'folderTile',
+              options: folderTileOptions(),
+              defaultValue: DEFAULT_SETTINGS.folderTile,
+            },
+          },
+          {
+            ...FOLDER_COVER_ROW(),
+            control: {
+              type: 'dropdown',
+              key: 'folderCover',
+              options: folderCoverOptions(),
+              defaultValue: DEFAULT_SETTINGS.folderCover,
+            },
+          },
+          {
+            ...FOLDER_PLATE_ROW(),
+            control: {
+              type: 'dropdown',
+              key: 'folderPlate',
+              options: folderPlateOptions(),
+              defaultValue: DEFAULT_SETTINGS.folderPlate,
+            },
+          },
+          {
+            ...FOLDER_SELECT_ROW(),
+            control: {
+              type: 'dropdown',
+              key: 'folderSelect',
+              options: folderSelectOptions(),
+              defaultValue: DEFAULT_SETTINGS.folderSelect,
+            },
+          },
+          {
+            ...FILE_TILE_ROW(),
+            control: {
+              type: 'dropdown',
+              key: 'fileTile',
+              options: fileTileOptions(),
+              defaultValue: DEFAULT_SETTINGS.fileTile,
+            },
+          },
+          subheading(t('groupMenus')),
           {
             ...MENU_OWN_ROW(),
             control: { type: 'toggle', key: 'menuOwnLabel', defaultValue: DEFAULT_SETTINGS.menuOwnLabel },

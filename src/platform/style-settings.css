@@ -9,7 +9,7 @@
    `--buba-tree-row-pad: var(--buba-style-tree-row-pad, 3px)`. Style Settings has one value per vault, not per
    device; where Buba's phone number differs, the phone rule (`.is-phone`) reads its own `-phone` knob.
    Defaults below must equal those fallbacks (a test checks it). Toggles set a class named after
-   their id on `body`; their rules are in this file.
+   their id on `body`, a choice sets the class of its option; their rules are in this file.
 
    Not here, on Buba's own settings page: guide lines, arrows and names in the folder color, the "Buba" label
    toggle. Whole pixels only: every px slider steps by 1. */
@@ -322,6 +322,20 @@ settings:
     level: 2
     collapsed: true
   -
+    id: buba-style-fold-side
+    title: Folder tile — raised part of the front
+    title.ru: Плитка папки — выступ передней части
+    type: class-select
+    allowEmpty: false
+    default: buba-style-fold-side-right
+    options:
+      -
+        label: Right · Справа
+        value: buba-style-fold-side-right
+      -
+        label: Left · Слева
+        value: buba-style-fold-side-left
+  -
     id: buba-style-plate-icon
     title: File without preview — icon size
     title.ru: Файл без превью — размер значка
@@ -348,6 +362,37 @@ settings:
     default: 20
     min: 5
     max: 60
+    step: 1
+    format: '%'
+  -
+    id: buba-style-file-small-place
+    title: Small silhouette — position
+    title.ru: Маленький силуэт — положение
+    description: For "Small silhouette" in Buba's "Program file tiles" setting
+    description.ru: Для варианта «Маленький силуэт» в настройке Бубы «Плитка файла программы»
+    type: class-select
+    allowEmpty: false
+    default: buba-style-file-small-bottom
+    options:
+      -
+        label: Bottom · Внизу
+        value: buba-style-file-small-bottom
+      -
+        label: Middle · По центру
+        value: buba-style-file-small-middle
+      -
+        label: Top · Вверху
+        value: buba-style-file-small-top
+  -
+    id: buba-style-file-small-size
+    title: Small silhouette — height
+    title.ru: Маленький силуэт — высота
+    description: Share of the tile height
+    description.ru: Доля высоты плитки
+    type: variable-number-slider
+    default: 62
+    min: 40
+    max: 90
     step: 1
     format: '%'
   -
@@ -421,6 +466,19 @@ body.buba-style-plate-fill .buba-tile-thumb.mod-format {
   color: var(--text-normal);
 }
 
+/* Small silhouette of a file without a picture: in the middle or at the top of its tile instead of the
+   bottom. The base rule is in src/assets/grid/file-tiles.css; the bottom option has no rule of its own. */
+body.buba-style-file-small-middle.buba-file-tile-small .buba-tile:not(.has-preview) .buba-tile-doc {
+  top: 50%;
+  bottom: auto;
+  translate: -50% -50%;
+}
+
+body.buba-style-file-small-top.buba-file-tile-small .buba-tile:not(.has-preview) .buba-tile-doc {
+  top: 0;
+  bottom: auto;
+}
+
 /* Comment icon on a tile, only while a comment is open (the neutral "all done" look stays): own background
    color, icon in the text color, background opacity. The base rule is in src/assets/grid/tiles.css. */
 body .buba-tile.has-open-comment .buba-tile-comment {
@@ -452,4 +510,17 @@ body.buba-style-menu-own-near .buba-menu-own {
 
 body.buba-style-menu-own-accent .buba-menu-own {
   color: var(--text-accent);
+}
+
+/* Folder tile: the raised part of the slanted front on the left, as in the component it comes from; Buba's own
+   front raises it on the right. */
+body.buba-style-fold-side-left:is(.buba-folder-tile-peek, .buba-folder-tile-solid) .buba-tile.is-folder {
+  --buba-fold-front-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 236.2 122.4' preserveAspectRatio='none'%3E%3Cpath d='M104.615 0.350494L33.1297 0.838776C32.7542 0.841362 32.3825 0.881463 32.032 0.918854C31.6754 0.956907 31.3392 0.992086 31.0057 0.992096H31.0047C30.6871 0.99235 30.3673 0.962051 30.0272 0.929596C29.6927 0.897686 29.3384 0.863802 28.9803 0.866119L13.2693 0.967682H13.2527L13.2352 0.969635C13.1239 0.981406 13.0121 0.986674 12.9002 0.986237H9.91388C8.33299 0.958599 6.76052 1.22345 5.27423 1.76651H5.27325C4.33579 2.11246 3.48761 2.66213 2.7879 3.37393L2.49689 3.68839L2.492 3.69424C1.62667 4.73882 1.00023 5.96217 0.656067 7.27725C0.653324 7.28773 0.654065 7.29886 0.652161 7.30948C0.3098 8.62705 0.257231 10.0048 0.499817 11.3446L12.2147 114.399L12.2156 114.411L12.2176 114.423C12.6046 116.568 13.7287 118.508 15.3934 119.902C17.058 121.297 19.1572 122.056 21.3231 122.049V122.05H215.379C217.76 122.02 220.064 121.192 221.926 119.698V119.697C223.657 118.384 224.857 116.485 225.305 114.35L225.307 114.339L235.914 53.3798L235.968 53.1093L235.97 53.0985L235.971 53.0888C236.134 51.8978 236.044 50.685 235.705 49.5321C235.307 48.1669 234.63 46.9005 233.717 45.8144L233.383 45.4296C232.58 44.5553 231.614 43.8449 230.539 43.3398C229.311 42.7628 227.971 42.4685 226.616 42.4774H146.746C144.063 42.4705 141.423 41.8004 139.056 40.5263C136.691 39.2522 134.671 37.4127 133.175 35.1689L113.548 5.05948L113.544 5.05362L113.539 5.04776C112.545 3.65165 111.238 2.51062 109.722 1.72061C108.266 0.886502 106.627 0.422235 104.952 0.365143V0.364166L104.633 0.350494H104.615Z'/%3E%3C/svg%3E");
+}
+
+/* The selection line follows the same side (src/assets/grid/folder-tiles.css). */
+body.buba-style-fold-side-left:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-fold-front-ring
+  path {
+  transform: none;
 }

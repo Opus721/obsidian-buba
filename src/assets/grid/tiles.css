@@ -47,6 +47,25 @@
   color: var(--text-muted);
 }
 
+/* A folder tile looks like its tree row (tiles.ts `FolderFace`, rules in src/assets/tree/tree.css): the icon
+   in the folder color; a color hard to see on the theme gets the faint outline filled with the color. The
+   name keeps the theme's text color whatever the tree does (word of the owner 26.10): over a cover a colored
+   name cannot be read. */
+.buba-tile.is-folder.mod-folder-color .buba-tile-thumb {
+  color: var(--buba-color);
+}
+
+.theme-light .buba-tile.is-folder.mod-folder-color.mod-low-contrast-light .buba-tile-icon svg,
+.theme-dark .buba-tile.is-folder.mod-folder-color.mod-low-contrast-dark .buba-tile-icon svg {
+  color: var(--text-faint);
+  fill: var(--buba-color, transparent);
+}
+
+/* A folder picture (cover or first picture) fills the square tile in every layout, cropped like a cover. */
+.buba-tile.is-folder .buba-tile-image {
+  object-fit: cover;
+}
+
 .buba-tile-icon {
   display: flex;
 }

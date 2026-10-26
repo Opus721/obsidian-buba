@@ -1,8 +1,9 @@
 // The "All tags" item of the Buba tree: it expands into a search field and a tag tree
 // (src/core/tags/tag-list.ts), like Obsidian's Tags view with nested tags and Eagle's "All Tags". Grouped
-// tags sit under a group row with an arrow; a group shows a Lucide `tags` icon in its color, the number of
-// files with any of its tags, and the `split` exclusive icon; a tag shows a color circle (grey without color)
-// and its file count; icon and circle sit in their own cell before the name. A group icon whose
+// tags sit under a group row with an arrow; a group shows a Lucide `tags` icon in its color (`tag` while
+// expanded, as "All tags"), the number of files with any of its tags, and the `split` exclusive icon; a tag
+// shows a color circle (grey without color) and its file count; icon and circle sit in their own cell before
+// the name. A group icon whose
 // color is hard to see on the theme background gets an outline, like a folder icon. The tag or group row
 // whose list is shown in the main grid is marked `is-active`, like the open folder in the tree. Counts
 // include only files that exist in the vault: as many tiles as a click shows through the "tag" or "group"
@@ -54,6 +55,7 @@ import { vaultFileIndex } from '../../platform/files/vault-index.ts';
 import type { BubaAssets } from '../api.ts';
 import { contrastClasses, tagDot } from '../color/dot.ts';
 import { dragExpander, type DragExpander } from '../../platform/drag-expand.ts';
+import { collapseMotion, expandMotion } from '../../platform/fold-motion.ts';
 import { RowMenus } from '../../platform/row-menus.ts';
 import { tagFiles } from './picker.ts';
 import { setListedTags } from './listed.ts';
@@ -73,6 +75,13 @@ const OPEN_KEY = 'buba-tag-groups-open';
  * from the group row class `buba-tag-group`.
  */
 export const GROUP_ICON = 'buba-tag-group-icon';
+
+/**
+ * "All tags" and a group show a stack of tags while collapsed and one tag while expanded, as a folder shows
+ * the closed and the open folder (src/core/icon/choices.ts).
+ */
+const CLOSED_ICON = 'tags';
+const OPEN_ICON = 'tag';
 export const GROUP_ICON_SVG =
   '<svg viewBox="0 0 24 24" width="100" height="100" fill="currentColor" stroke="currentColor" ' +
   'stroke-linecap="round" stroke-linejoin="round">' +
@@ -226,7 +235,8 @@ export function registerTagList(
     assets.registerTreeItem({
       id: 'all-tags',
       title: t('allTags'),
-      icon: 'tag',
+      icon: CLOSED_ICON,
+      openIcon: OPEN_ICON,
       count: () => tree().tags.length,
       onChange,
       render: (containerEl) => renderTagList(containerEl, context),
@@ -326,6 +336,12 @@ function renderTagList(containerEl: HTMLElement, context: ListContext): () => vo
   // Drawn rows with their sources, and the marked row of the shown tag or group: one, like the tree's open
   // folder.
   let selves: { self: HTMLElement; source: GridSourceState }[] = [];
+  // Tag containers of the drawn expanded groups, by group key: the block that grows or shrinks; and their
+  // arrows, which turn at once.
+  const groupChildren = new Map<
+    string,
+    { children: HTMLElement; arrow: HTMLElement | null; icon: HTMLElement }
+  >();
   let activeEl: HTMLElement | null = null;
   const markActive = (): void => {
     const shown = context.shownSource();
@@ -364,9 +380,18 @@ function renderTagList(containerEl: HTMLElement, context: ListContext): () => vo
       if (!row) break;
       let el: HTMLElement;
       let self: HTMLElement;
-      if (row.kind === 'group')
-        ({ children, flair: el, self } = drawGroup(listEl, row, context, menus, toggle, expander));
-      else ({ flair: el, self } = drawTag(row.depth ? children : listEl, row, context, menus));
+      if (row.kind === 'group') {
+        let arrow: HTMLElement | null;
+        let icon: HTMLElement;
+        ({
+          children,
+          flair: el,
+          self,
+          arrow,
+          icon,
+        } = drawGroup(listEl, row, context, menus, toggle, expander));
+        if (row.expanded) groupChildren.set(row.key, { children, arrow, icon });
+      } else ({ flair: el, self } = drawTag(row.depth ? children : listEl, row, context, menus));
       flairs.push({ el, count: row.count });
       selves.push({ self, source: row.source });
     }
@@ -405,18 +430,44 @@ function renderTagList(containerEl: HTMLElement, context: ListContext): () => vo
     listEl.empty();
     flairs = [];
     selves = [];
+    groupChildren.clear();
     activeEl = null;
     children = listEl;
     tail = storage !== undefined;
     portion(Math.max(PORTION, keep));
   };
-  const toggle = (group: string): void => {
-    // Rows above the group are unchanged: they and a portion after the group are drawn at once, so the group
-    // stays put.
-    const at = rows.findIndex((row) => row.kind === 'group' && row.key === group);
-    open = toggleOpenGroup(loadOpen(app), group);
-    app.saveLocalStorage(OPEN_KEY, [...open]);
-    draw(Math.max(at, 0) + PORTION);
+  // Groups whose tags are shrinking after a click; a click on them waits for the end.
+  const shrinking = new Set<string>();
+  const childrenOf = (group: string): HTMLElement | null => groupChildren.get(group)?.children ?? null;
+  /**
+   * Expand or collapse; `motion` (a click, not a drag): the tags grow after the redraw or shrink first, as
+   * folders in the tree (src/platform/fold-motion.ts).
+   */
+  const toggle = (group: string, motion = false): void => {
+    if (shrinking.has(group)) return;
+    const apply = (): void => {
+      // Rows above the group are unchanged: they and a portion after the group are drawn at once, so the
+      // group stays put.
+      const at = rows.findIndex((row) => row.kind === 'group' && row.key === group);
+      open = toggleOpenGroup(loadOpen(app), group);
+      app.saveLocalStorage(OPEN_KEY, [...open]);
+      draw(Math.max(at, 0) + PORTION);
+    };
+    const children = motion ? childrenOf(group) : null;
+    if (!children) {
+      apply();
+      const grown = motion ? childrenOf(group) : null;
+      if (grown) expandMotion(grown);
+      return;
+    }
+    const drawn = groupChildren.get(group);
+    drawn?.arrow?.addClass('is-collapsed');
+    if (drawn) setIcon(drawn.icon, CLOSED_ICON);
+    shrinking.add(group);
+    collapseMotion(children, () => {
+      shrinking.delete(group);
+      apply();
+    });
   };
   let frame = 0;
   const off = context.onChange(() => {
@@ -448,12 +499,12 @@ function renderTagList(containerEl: HTMLElement, context: ListContext): () => vo
 
 /**
  * Start of a row: the icon cell and the name as text. A group's cell holds a Lucide `tags` icon in its color
- * (`--buba-color` only after `colorCss`; grey from the styles without color), a tag's a color circle, a
- * colorless tag's a grey circle. A group color hard to see on the theme background gets the same
- * `mod-low-contrast-<theme>` classes as the dot (src/assets/color/dot.ts): a white icon in the light theme
- * gets an outline (tag-list.css).
+ * (`tag` while expanded; `--buba-color` only after `colorCss`; grey from the styles without color), a tag's a
+ * color circle, a colorless tag's a grey circle. A group color hard to see on the theme background gets the
+ * same `mod-low-contrast-<theme>` classes as the dot (src/assets/color/dot.ts): a white icon in the light
+ * theme gets an outline (tag-list.css).
  */
-function inner(item: HTMLElement, self: HTMLElement, row: TagTreeRow): void {
+function inner(item: HTMLElement, self: HTMLElement, row: TagTreeRow): HTMLElement {
   // The color also goes on the `.tree-item` row ("Tree" settings: child guide lines, group arrow, name); a
   // row without color gets `initial`, otherwise a tag would inherit its group's color.
   const css = colorCss(row.color);
@@ -464,10 +515,11 @@ function inner(item: HTMLElement, self: HTMLElement, row: TagTreeRow): void {
   if (row.kind === 'tag') tagDot(cell, row.color);
   else {
     cell.addClass('mod-group', ...contrastClasses(row.color));
-    setIcon(cell, 'tags');
+    setIcon(cell, row.kind === 'group' && row.collapsible && row.expanded ? OPEN_ICON : CLOSED_ICON);
     if (css !== null) cell.setCssProps({ '--buba-color': css });
   }
   self.createDiv({ cls: 'tree-item-inner', text: row.title });
+  return cell;
 }
 
 /**
@@ -475,35 +527,45 @@ function inner(item: HTMLElement, self: HTMLElement, row: TagTreeRow): void {
  * and count; a click opens the group grid, the arrow and a double-click collapse or expand it. A double-click
  * on the arrow itself is two clicks and two toggles, as with Obsidian's tree arrows (`onCollapseClick`,
  * app.js 1.13.7), so a `dblclick` bubbling up from the arrow does not toggle the row. The exclusive mark sits
- * in the row, not in the count block, where its bottom edge landed on the text baseline. Returns the
- * container for its tags, the count cell and the row itself.
+ * in the row, not in the count block, where its bottom edge landed on the text baseline. While the theme hides
+ * the arrow (the Buba theme), the icon takes its place: a click on it collapses or expands. Returns the
+ * container for its tags, the count cell, the row itself, its arrow and its icon cell.
  */
 function drawGroup(
   listEl: HTMLElement,
   row: Extract<TagTreeRow, { kind: 'group' }>,
   context: ListContext,
   menus: RowMenus,
-  toggle: (group: string) => void,
+  toggle: (group: string, motion?: boolean) => void,
   expander: DragExpander,
-): { children: HTMLElement; flair: HTMLElement; self: HTMLElement } {
+): {
+  children: HTMLElement;
+  flair: HTMLElement;
+  self: HTMLElement;
+  arrow: HTMLElement | null;
+  icon: HTMLElement;
+} {
   const item = listEl.createDiv({ cls: 'tree-item buba-tag-group' });
   const self = item.createDiv({ cls: 'tree-item-self is-clickable', attr: { 'data-group': row.key } });
-  if (row.collapsible) {
+  const arrow = row.collapsible ? self.createDiv({ cls: 'tree-item-icon collapse-icon' }) : null;
+  // The arrow, or the icon while the arrow is hidden (a hidden arrow has no boxes).
+  const onFold = (at: Node | null): boolean =>
+    !!arrow && (arrow.contains(at) || (icon.contains(at) && arrow.getClientRects().length === 0));
+  if (arrow) {
     self.addClass('mod-collapsible');
-    const arrow = self.createDiv({ cls: 'tree-item-icon collapse-icon' });
     setIcon(arrow, 'right-triangle');
     arrow.toggleClass('is-collapsed', !row.expanded);
     arrow.addEventListener('click', (evt) => {
       evt.stopPropagation();
-      toggle(row.key);
+      toggle(row.key, true);
     });
     // The target may be the arrow or the svg and path inside it, hence `contains` rather than equality.
     self.addEventListener('dblclick', (evt) => {
-      if (!arrow.contains(evt.target as Node | null)) toggle(row.key);
+      if (!onFold(evt.target as Node | null)) toggle(row.key, true);
     });
   }
   item.toggleClass('is-collapsed', !row.expanded);
-  inner(item, self, row);
+  const icon = inner(item, self, row);
   if (row.exclusive) {
     const mark = self.createSpan({
       cls: 'buba-tag-group-mark',
@@ -514,7 +576,8 @@ function drawGroup(
   }
   const flair = drawCount(self, row.count);
   self.addEventListener('click', (evt) => {
-    if (evt.detail <= 1 && menus.click()) void context.assets.openGrid(row.source);
+    if (onFold(evt.target as Node | null)) toggle(row.key, true);
+    else if (evt.detail <= 1 && menus.click()) void context.assets.openGrid(row.source);
   });
   menus.attach(self, (at) => {
     const storage = context.storage();
@@ -541,7 +604,13 @@ function drawGroup(
     evt.preventDefault();
     dropTag(evt.dataTransfer, row.title, context);
   });
-  return { children: row.expanded ? item.createDiv({ cls: 'tree-item-children' }) : listEl, flair, self };
+  return {
+    children: row.expanded ? item.createDiv({ cls: 'tree-item-children' }) : listEl,
+    flair,
+    self,
+    arrow,
+    icon,
+  };
 }
 
 /**

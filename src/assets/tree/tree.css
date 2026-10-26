@@ -258,3 +258,14 @@ body.theme-dark.buba-tree-name-folder
   > .tree-item-inner {
   color: var(--buba-color);
 }
+
+/* "Long names on one line" (on by default): a folder or tag name that does not fit ends with "…" on its
+   first line, in both trees; the count stays at the right edge. The whole name shows in Obsidian's hover
+   tooltip (view.ts sets `aria-label` only on a cut name). Off, a long name wraps as in Obsidian's file
+   explorer. `min-width: 0` lets the flex item shrink below its text width, so the ellipsis can appear. */
+body.buba-tree-name-one-line .buba-tree .tree-item-inner {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

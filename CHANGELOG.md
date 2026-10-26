@@ -2,6 +2,28 @@
 
 What changed in each release of Buba, in plain words. The newest release is at the top.
 
+## 1.1.0
+
+Folder tiles in the grid show what is inside: a cover you choose, or the folder's own look.
+
+- Right-click a folder tile and choose "Upload cover…" to pick a picture on your computer or phone; the tile shows it. "Make folder cover" on a picture tile uses that picture for the folder it lies in. "Remove cover" takes it away. A cover is stored apart from the folder's files, in Buba's own data, so it never shows up among them, and it follows the folder when you rename or move it.
+- A folder without a cover shows its own icon in its own color, as in the Buba tree. The name on the tile keeps the normal text color.
+- A plain folder, with no cover and no color or icon of its own, shows its newest picture, or one from its subfolders; an empty folder keeps the grey folder icon.
+- Covers show only on tiles, not in the tree.
+- Right-click a folder with a cover and choose "Move cover" to frame it: drag to move the picture, scroll or pinch to zoom, then press Enter or click outside to keep it, or Esc to cancel. "Center cover" puts it back in the middle. A new cover starts in the middle.
+- A folder tile is drawn as a folder: a straight back and a slanted front with the cover on it; the back takes the cover's color, or theme grey if you choose so in "Behind a cover in front". Hover over it on a computer and the front tips forward a little. A selected folder gets its tile area tinted with the accent color; "Folder selection" in Buba's settings can put a line around the front instead, which tips with it, or tint the area with a frame.
+- A few of the folder's files lie inside the tile, in their own proportions, documents as pages; on a computer they fan out on hover. "Folder tiles" in Buba's settings turns them off.
+- "Folder cover" in Buba's settings can put the cover on the back instead, behind a glass front in the colors of your theme.
+- In Buba's settings, the appearance rows are sorted under small subheadings: folder and tag trees, grid tiles, menus.
+- With the Style Settings plugin, the raised part of the folder front can go on the left instead of the right.
+
+The Buba tree shows whether a folder or tag group is open by its icon, and opens smoothly.
+
+- A folder without its own icon shows a closed folder; when you expand it, the icon opens. A folder with its own icon keeps it.
+- "All tags" and tag groups show a stack of tags while closed and a single tag while open.
+- With the Buba theme, from its version 1.1.1, the tree keeps no place for arrows on the left and moves left: a small arrow follows the name of a folder or tag group, as in Linear's sidebar, and a click or tap on it expands or collapses it. With other themes the arrows stay on the left. A double click on the name works everywhere, as before.
+- On a computer, folders, tag groups and "All tags" open and close with a short slide. It is off when the system asks to reduce motion, and on a phone a tap opens at once, as before.
+
 ## 1.0.3
 
 Long file names can be read in full, and a drag opens the closed folder or tag group it waits over.

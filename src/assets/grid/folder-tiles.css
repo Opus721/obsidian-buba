@@ -1,0 +1,503 @@
+/* Folder tile in the grid ("Folder tiles" and "Folder cover" settings, classes on `body` from
+   src/platform/tree-look.ts; parts made by tiles.ts `#fold`). Word of the owner 25.10: the folder of a reference
+   component, lower than its square cell and standing on its bottom: a straight back plate a little narrower
+   than the folder, and a slanted front, wider at the top, raised on the right (the component's path, one to
+   one, mirrored: word of the owner 25.10). By default the cover is on the front and the plate takes the cover's
+   average color, or theme grey (word of the owner 26.10); the other choice lays the cover on the back plate under
+   a front of frosted glass of the theme's tone. With files inside (default, word of the owner 26.10) up
+   to three files lie in the folder in their own proportions, a loose stack; on desktop hover the front sinks
+   a little and they come out in a fan, a little uneven; on the phone they stay. The icon sits at the bottom
+   right on a plaque, the name at the bottom left on one line with it; the name under the tile is not shown.
+   Every color comes from the theme (`--text-normal`, `--background-primary`) and the folder color, so the
+   folder fits any theme. The selection tints the tile area, or frames it, or is a line around the front. */
+
+.buba-fold-front-ring,
+.buba-fold-back,
+.buba-fold-peeks,
+.buba-fold-front,
+.buba-fold-shade,
+.buba-fold-name {
+  display: none;
+}
+
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder {
+  --buba-fold-front-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 236.2 122.4' preserveAspectRatio='none'%3E%3Cpath transform='translate(236.2 0) scale(-1 1)' d='M104.615 0.350494L33.1297 0.838776C32.7542 0.841362 32.3825 0.881463 32.032 0.918854C31.6754 0.956907 31.3392 0.992086 31.0057 0.992096H31.0047C30.6871 0.99235 30.3673 0.962051 30.0272 0.929596C29.6927 0.897686 29.3384 0.863802 28.9803 0.866119L13.2693 0.967682H13.2527L13.2352 0.969635C13.1239 0.981406 13.0121 0.986674 12.9002 0.986237H9.91388C8.33299 0.958599 6.76052 1.22345 5.27423 1.76651H5.27325C4.33579 2.11246 3.48761 2.66213 2.7879 3.37393L2.49689 3.68839L2.492 3.69424C1.62667 4.73882 1.00023 5.96217 0.656067 7.27725C0.653324 7.28773 0.654065 7.29886 0.652161 7.30948C0.3098 8.62705 0.257231 10.0048 0.499817 11.3446L12.2147 114.399L12.2156 114.411L12.2176 114.423C12.6046 116.568 13.7287 118.508 15.3934 119.902C17.058 121.297 19.1572 122.056 21.3231 122.049V122.05H215.379C217.76 122.02 220.064 121.192 221.926 119.698V119.697C223.657 118.384 224.857 116.485 225.305 114.35L225.307 114.339L235.914 53.3798L235.968 53.1093L235.97 53.0985L235.971 53.0888C236.134 51.8978 236.044 50.685 235.705 49.5321C235.307 48.1669 234.63 46.9005 233.717 45.8144L233.383 45.4296C232.58 44.5553 231.614 43.8449 230.539 43.3398C229.311 42.7628 227.971 42.4685 226.616 42.4774H146.746C144.063 42.4705 141.423 41.8004 139.056 40.5263C136.691 39.2522 134.671 37.4127 133.175 35.1689L113.548 5.05948L113.544 5.05362L113.539 5.04776C112.545 3.65165 111.238 2.51062 109.722 1.72061C108.266 0.886502 106.627 0.422235 104.952 0.365143V0.364166L104.633 0.350494H104.615Z'/%3E%3C/svg%3E");
+  /* The folder is 320 × 208 in its cell: it starts at 35 % from the top, the front is 176 of 320 high. */
+  --buba-fold-top: 35%;
+  --buba-fold-under: -1px;
+  --buba-fold-foot: 12px;
+  --buba-fold-open: 0.94;
+  --buba-fold-front-h: 55.6%;
+  --buba-fold-side: 6.25%;
+  --buba-fold-plaque: 22px;
+  --buba-fold-icon: 14px;
+  --buba-fold-pad: var(--size-4-2);
+  /* The plate and a front without a picture are mixed over the grid background, so they stand out from it in
+     a theme whose secondary background is darker than the grid, such as Buba. */
+  --buba-fold-wall: color-mix(in srgb, var(--text-normal) 7%, var(--background-primary));
+  --buba-fold-face: color-mix(in srgb, var(--text-normal) 13%, var(--background-primary));
+  --buba-fold-glass: color-mix(in srgb, var(--background-primary) 50%, transparent);
+  --buba-fold-shine: rgb(255 255 255 / 10%);
+  --buba-fold-glow: color-mix(in srgb, var(--text-normal) 6%, transparent);
+}
+
+.theme-light:is(.buba-folder-tile-peek, .buba-folder-tile-solid) .buba-tile.is-folder {
+  --buba-fold-wall: color-mix(in srgb, var(--text-normal) 12%, var(--background-primary));
+  --buba-fold-face: color-mix(in srgb, var(--text-normal) 6%, var(--background-primary));
+  --buba-fold-glass: color-mix(in srgb, var(--background-primary) 58%, transparent);
+  --buba-fold-shine: rgb(255 255 255 / 60%);
+  --buba-fold-glow: rgb(255 255 255 / 55%);
+}
+
+.is-phone:is(.buba-folder-tile-peek, .buba-folder-tile-solid) .buba-tile.is-folder {
+  --buba-fold-plaque: 24px;
+  --buba-fold-icon: 16px;
+  --buba-fold-pad: 7px;
+}
+
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder.mod-folder-color {
+  --buba-fold-wall: color-mix(in srgb, var(--buba-color) 58%, var(--background-primary));
+  --buba-fold-face: color-mix(
+    in srgb,
+    var(--buba-color) 26%,
+    color-mix(in srgb, var(--text-normal) 10%, var(--background-secondary))
+  );
+  --buba-fold-glass: color-mix(
+    in srgb,
+    var(--buba-color) 18%,
+    color-mix(in srgb, var(--background-primary) 50%, transparent)
+  );
+}
+
+.theme-light:is(.buba-folder-tile-peek, .buba-folder-tile-solid) .buba-tile.is-folder.mod-folder-color {
+  --buba-fold-face: color-mix(in srgb, var(--buba-color) 26%, var(--background-secondary));
+}
+
+/* The tile picture is only the frame for the parts: no background, ring or clipping of its own (a theme's
+   card look on tiles stays on file tiles). */
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder .buba-tile-thumb {
+  overflow: visible;
+  background: none;
+  box-shadow: none;
+}
+
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder .buba-tile-name {
+  visibility: hidden;
+}
+
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid)
+  .buba-tile.is-folder
+  :is(.buba-fold-front-ring, .buba-fold-back, .buba-fold-front, .buba-fold-shade, .buba-fold-peeks) {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* The selection, "Folder selection" setting (word of the owner 26.10). One choice is a line around the front
+   only, the plate untouched: the front's path stroked in an SVG of the front's size (tiles.ts `#fold`). The
+   stroke does not scale with the box, so it is one width on every edge and curve, half over the front's edge
+   (no seam of the page between them) and half outside. On hover the box gets lower exactly as the front
+   squashes, from the same bottom, so the line follows it without a break and keeps its width. */
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid):not(
+    .buba-folder-select-fill,
+    .buba-folder-select-frame
+  )
+  .buba-tile.is-folder.is-selected
+  .buba-fold-front-ring {
+  display: block;
+}
+
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder .buba-fold-front-ring {
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  height: var(--buba-fold-front-h);
+  z-index: 4;
+  transition: height 0.45s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.buba-fold-front-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.buba-fold-front-ring path {
+  fill: none;
+  stroke: var(--interactive-accent);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+  transform: translate(236.2px, 0) scale(-1, 1);
+}
+
+/* The other two choices, the tinted area by default: the whole tile, picture and the name row under it, as a
+   rounded rectangle tinted with the accent, or tinted lightly with an accent frame. It starts at the top of
+   the neighbours' pictures and ends at the bottom of their names, so it stays in the grid's rows (word of the
+   owner 26.10); with names hidden the tile is the picture alone and so is the area. To the sides it reaches
+   into the gap. The tile paints it before the picture, so the folder stays on top and untouched. */
+:is(body.buba-folder-select-fill, body.buba-folder-select-frame):is(
+    .buba-folder-tile-peek,
+    .buba-folder-tile-solid
+  )
+  .buba-tile.is-folder.is-selected::before {
+  content: '';
+  position: absolute;
+  inset: 0 -6px;
+  border-radius: var(--radius-l);
+  background-color: color-mix(in srgb, var(--interactive-accent) 22%, transparent);
+  pointer-events: none;
+}
+
+body.buba-folder-select-frame:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.is-selected::before {
+  background-color: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+  box-shadow: inset 0 0 0 2px var(--interactive-accent);
+}
+
+/* Back plate, and the picture on it. Both go down to the bottom of the front, so its glass shows them to its
+   lower edge and nothing dark from the page comes in, at rest and on hover; their lower corners are rounder,
+   to stay inside the front's round corners. */
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder .buba-fold-back {
+  display: block;
+  top: var(--buba-fold-top);
+  bottom: var(--buba-fold-under);
+  left: var(--buba-fold-side);
+  right: var(--buba-fold-side);
+  overflow: hidden;
+  border-radius: var(--radius-s) var(--radius-s) var(--buba-fold-foot) var(--buba-fold-foot);
+  background-color: var(--buba-fold-wall);
+  box-shadow: inset 0 0 12px 6px var(--buba-fold-glow);
+}
+
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder .buba-tile-image {
+  top: var(--buba-fold-top);
+  left: var(--buba-fold-side);
+  width: calc(100% - 2 * var(--buba-fold-side));
+  height: calc(100% - var(--buba-fold-top) - var(--buba-fold-under));
+  z-index: 1;
+  border-radius: var(--radius-s) var(--radius-s) var(--buba-fold-foot) var(--buba-fold-foot);
+  object-fit: cover;
+}
+
+/* With files inside, a folder without its own cover shows no picture: its pictures lie in it instead. */
+body.buba-folder-tile-peek .buba-tile.is-folder:not(.has-cover) .buba-tile-image {
+  display: none;
+}
+
+/* The front: frosted glass of the theme's tone, lighter at the top. */
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder .buba-fold-front {
+  display: block;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  height: var(--buba-fold-front-h);
+  z-index: 3;
+  background: linear-gradient(var(--buba-fold-shine), transparent 30%), var(--buba-fold-glass);
+  backdrop-filter: blur(9px) saturate(1.4);
+  mask: var(--buba-fold-front-mask) 0 0 / 100% 100% no-repeat;
+  transform-origin: 50% 100%;
+  transition: transform 0.45s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+/* Cover in front: the picture on the front, cut by its shape, a shade at the bottom for the name; the plate
+   stays grey or takes the cover's average color, lighter at the top. With files inside only the folder's own cover shows, as behind. A front without a picture is
+   the folder face. */
+body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder
+  .buba-fold-front {
+  background: var(--buba-fold-face);
+  backdrop-filter: none;
+}
+
+body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.has-preview:is(.buba-folder-tile-solid *, .has-cover)
+  :is(.buba-tile-image, .buba-fold-shade) {
+  display: block;
+  top: auto;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  width: calc(100% + 2px);
+  height: var(--buba-fold-front-h);
+  border-radius: 0;
+  mask: var(--buba-fold-front-mask) 0 0 / 100% 100% no-repeat;
+  transform-origin: 50% 100%;
+  transition: transform 0.45s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.has-preview:is(.buba-folder-tile-solid *, .has-cover)
+  .buba-tile-image {
+  z-index: 3;
+}
+
+body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.has-preview:is(.buba-folder-tile-solid *, .has-cover)
+  .buba-fold-front {
+  display: none;
+}
+
+body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.has-preview:is(.buba-folder-tile-solid *, .has-cover)
+  .buba-fold-shade {
+  z-index: 4;
+  background: linear-gradient(transparent 45%, rgb(0 0 0 / 62%));
+}
+
+body.buba-folder-cover-front.buba-folder-plate-cover:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.has-preview:is(.buba-folder-tile-solid *, .has-cover)
+  .buba-fold-back {
+  background:
+    linear-gradient(rgb(255 255 255 / 14%), rgb(0 0 0 / 12%) 60%),
+    var(--buba-fold-average, var(--buba-fold-wall));
+  box-shadow: none;
+}
+
+/* A moved cover ("Move cover", tiles.ts `#frame`): the picture is the background of its box, placed and sized
+   by the frame, so it can be larger than the box and off its middle; the tile picture stays only as the
+   source. Behind: on the plate. In front: on the front, the plate as without a frame. */
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder.has-frame .buba-tile-image {
+  visibility: hidden;
+}
+
+body:not(.buba-folder-cover-front):is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.has-frame
+  .buba-fold-back {
+  background-image: var(--buba-cover-url);
+  background-position: var(--buba-cover-pos);
+  background-size: var(--buba-cover-back);
+  background-repeat: no-repeat;
+  box-shadow: none;
+}
+
+body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.has-frame.has-preview
+  .buba-fold-front {
+  display: block;
+  background-image: var(--buba-cover-url);
+  background-position: var(--buba-cover-pos);
+  background-size: var(--buba-cover-front);
+  background-repeat: no-repeat;
+}
+
+/* While the cover is being moved: a hand, the gesture is the tile's own, and behind the glass front the
+   front fades so the whole cover shows. */
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder.is-framing {
+  cursor: grab;
+  touch-action: none;
+}
+
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder.is-moving-cover {
+  cursor: grabbing;
+}
+
+body:not(.buba-folder-cover-front):is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.is-framing
+  .buba-fold-front {
+  opacity: 0.3;
+}
+
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder.is-framing .buba-fold-back {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+}
+
+/* Name and plaque: the name from the left edge to the plaque, one line with "…", centered on the plaque. */
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder .buba-fold-name {
+  display: block;
+  position: absolute;
+  left: calc(var(--buba-fold-pad) + 4px);
+  right: calc(var(--buba-fold-pad) + var(--buba-fold-plaque) + var(--size-4-2));
+  bottom: var(--buba-fold-pad);
+  z-index: 5;
+  overflow: hidden;
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-medium);
+  line-height: var(--buba-fold-plaque);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* The plaque is the tile icon: whole-pixel icon in a whole-pixel square, so it sits exactly in the middle. On
+   the glass it is a tint of the theme text with a hairline. */
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder .buba-tile-icon {
+  --icon-size: var(--buba-fold-icon);
+  --icon-stroke: 2px;
+  position: absolute;
+  right: calc(var(--buba-fold-pad) + 4px);
+  bottom: var(--buba-fold-pad);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--buba-fold-plaque);
+  height: var(--buba-fold-plaque);
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--text-normal) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-normal) 16%, transparent);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder
+  .buba-tile-icon {
+  background-color: color-mix(in srgb, var(--text-normal) 14%, var(--buba-fold-face));
+  box-shadow: none;
+}
+
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid) .buba-tile.is-folder .buba-tile-icon svg {
+  width: var(--buba-fold-icon);
+  height: var(--buba-fold-icon);
+}
+
+/* A colored folder: the plaque in its color, the icon white on a dark color and dark on a light one (relative
+   color: lightness above 0.66 gives dark). The tree's outline for a hard-to-see color is not needed on the
+   plaque. */
+:is(body.buba-folder-tile-peek, body.buba-folder-tile-solid)
+  .buba-tile.is-folder.mod-folder-color
+  .buba-tile-icon {
+  background-color: var(--buba-color);
+  box-shadow: none;
+  color: rgb(20 20 22 / 88%);
+}
+
+@supports (color: oklch(from black l c h)) {
+  :is(body.buba-folder-tile-peek, body.buba-folder-tile-solid)
+    .buba-tile.is-folder.mod-folder-color
+    .buba-tile-icon {
+    color: oklch(from var(--buba-color) clamp(0.2, (0.66 - l) * 1000, 0.99) 0 0);
+  }
+}
+
+body.theme-light:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.mod-folder-color.mod-low-contrast-light
+  .buba-tile-icon
+  svg,
+body.theme-dark:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.mod-folder-color.mod-low-contrast-dark
+  .buba-tile-icon
+  svg {
+  color: inherit;
+  fill: none;
+}
+
+/* On a cover in front: the name white over the shade, a plaque without a color white with a dark icon. */
+body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.has-preview:is(.buba-folder-tile-solid *, .has-cover)
+  .buba-fold-name {
+  color: white;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 40%);
+}
+
+body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid)
+  .buba-tile.is-folder.has-preview:is(.buba-folder-tile-solid *, .has-cover):not(.mod-folder-color)
+  .buba-tile-icon {
+  background-color: rgb(255 255 255 / 90%);
+  color: rgb(29 29 31);
+}
+
+/* Files inside: each in its own proportions; at rest a loose stack in the folder, its top over the plate. */
+body.buba-folder-tile-peek .buba-tile.is-folder .buba-fold-peeks {
+  display: block;
+  inset: 0;
+  z-index: 2;
+}
+
+.buba-fold-peek {
+  position: absolute;
+  left: calc(50% + var(--buba-peek-x, 0%));
+  bottom: calc(26% - var(--buba-peek-y, 0%));
+  width: var(--buba-peek-w, 40%);
+  height: var(--buba-peek-h, 40%);
+  overflow: hidden;
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 35%);
+  translate: -50% 0;
+  rotate: var(--buba-peek-r, 0deg);
+  transition:
+    left 0.5s cubic-bezier(0.3, 1.4, 0.5, 1),
+    bottom 0.5s cubic-bezier(0.3, 1.4, 0.5, 1),
+    rotate 0.5s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.buba-fold-peek:not(.is-shown) {
+  display: none;
+}
+
+.buba-fold-peek img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A document without a picture: a page with lines and its type in the program color. */
+.buba-fold-peek.is-page {
+  display: grid;
+  place-items: end center;
+  padding-bottom: 14%;
+  background:
+    repeating-linear-gradient(transparent 0 3px, rgb(0 0 0 / 9%) 3px 5px) 50% 14% / 68% 40% no-repeat,
+    rgb(251 251 252);
+}
+
+.buba-fold-peek.is-page img,
+.buba-fold-peek:not(.is-page) .buba-fold-page {
+  display: none;
+}
+
+.buba-fold-page {
+  max-width: 90%;
+  overflow: hidden;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background-color: var(--buba-format-color, rgb(110 110 120));
+  color: white;
+  font-size: 9px;
+  font-weight: var(--font-bold);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  :is(body.buba-folder-tile-peek, body.buba-folder-tile-solid):not(.is-mobile)
+    .buba-tile.is-folder:not(.is-framing):hover
+    .buba-fold-front,
+  body.buba-folder-cover-front:is(.buba-folder-tile-peek, .buba-folder-tile-solid):not(.is-mobile)
+    .buba-tile.is-folder.has-preview:is(.buba-folder-tile-solid *, .has-cover):not(.is-framing):hover
+    :is(.buba-tile-image, .buba-fold-shade) {
+    /* A flat squash, not a 3D tilt: under a 3D transform Chromium drops the glass blur on part of the front.
+       Without files the folder only opens a little; with files it opens wider to let them out. */
+    transform: scaleY(var(--buba-fold-open));
+  }
+
+  :is(body.buba-folder-tile-peek, body.buba-folder-tile-solid):not(.is-mobile)
+    .buba-tile.is-folder:not(.is-framing):hover
+    .buba-fold-front-ring {
+    height: calc(var(--buba-fold-front-h) * var(--buba-fold-open));
+  }
+
+  body.buba-folder-tile-peek:not(.is-mobile) .buba-tile.is-folder:hover .buba-fold-peek {
+    left: calc(50% + var(--buba-fan-x, 0%));
+    bottom: calc(26% - var(--buba-fan-y, 0%));
+    rotate: var(--buba-fan-r, 0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .buba-fold-peek,
+  :is(body.buba-folder-tile-peek, body.buba-folder-tile-solid)
+    .buba-tile.is-folder
+    :is(.buba-fold-front-ring, .buba-fold-front, .buba-tile-image, .buba-fold-shade) {
+    transition: none;
+  }
+}
+
+body.buba-folder-tile-peek .buba-tile.is-folder {
+  --buba-fold-open: 0.9;
+}

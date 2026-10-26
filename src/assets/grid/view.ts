@@ -34,11 +34,14 @@ import {
   type TypeShown,
 } from '../../core/filter/file-types.ts';
 import { lookOf, sameLook } from '../../core/layout/place-views.ts';
+import type { CoverFrame, FolderLooks } from '../../core/storage/types.ts';
 import { gridItems, keepsPlace, type GridItem } from '../../core/sort/grid-items.ts';
 import { pathsVersionOf, type FileIndex, type FileRecord } from '../../platform/files/file-index.ts';
 import { vaultFileIndex } from '../../platform/files/vault-index.ts';
+import { onSettingsChange, settingsOf } from '../../platform/settings.ts';
 import type { BubaAssets, BubaGridView, GridSourceProvider } from '../api.ts';
 import { seriesTile } from './click-series.ts';
+import { FolderFaces, isCoverFile } from './folder-faces.ts';
 import { isNavigationStep } from './navigation.ts';
 import { placeKeyOf, placeViewsOf, shownSource, type PlaceMemory, type Shown } from './place-views.ts';
 import { TileGrid, type TilePlace, type TileRect } from './tiles.ts';
@@ -139,6 +142,7 @@ export class GridView extends ItemView implements BubaGridView {
     own: false,
   };
   #tiles: TileGrid | null = null;
+  #faces: FolderFaces | null = null;
   /** The grid body and its empty hint: the `pane-empty` element and its lines joined into one string. */
   #body: HTMLElement | null = null;
   #hint: HTMLElement | null = null;
@@ -230,6 +234,41 @@ export class GridView extends ItemView implements BubaGridView {
     const body = this.contentEl.createDiv({ cls: 'buba-grid-scroller', attr: { tabindex: '0' } });
     this.#tiles = new TileGrid(body, this.#plugin);
     this.#body = body;
+    // Folder tiles look like their tree rows and show a cover or the first picture (folder-faces.ts). Index
+    // changes redraw the grid anyway, so they only drop the faces (the index listener below).
+    const storage = (this.#plugin as Plugin & { storage?: FolderLooks }).storage;
+    const faces = new FolderFaces(this.app.vault, this.#index, storage);
+    this.#faces = faces;
+    this.#tiles.setFolderFaces((path) => faces.face(path));
+    const refaced = (): void => {
+      faces.clear();
+      this.#tiles?.refreshFolders();
+    };
+    if (storage) this.register(storage.onFolderLook(refaced));
+    // "Program file tiles" changes the proportion of files without a picture in rows and columns.
+    let fileTile = settingsOf(this.#plugin).fileTile;
+    this.register(
+      onSettingsChange(this.#plugin, (settings) => {
+        if (settings.fileTile === fileTile) return;
+        fileTile = settings.fileTile;
+        this.#tiles?.restyle();
+      }),
+    );
+    // A back plate in the cover's color is counted only under its settings: they turn it on for shown folders.
+    let plate = `${settingsOf(this.#plugin).folderCover}|${settingsOf(this.#plugin).folderPlate}`;
+    this.register(
+      onSettingsChange(this.#plugin, (settings) => {
+        const next = `${settings.folderCover}|${settings.folderPlate}`;
+        if (next === plate) return;
+        plate = next;
+        this.#tiles?.recolor();
+      }),
+    );
+    const cover = (file: TAbstractFile): void => {
+      if (isCoverFile(file)) refaced();
+    };
+    this.registerEvent(this.app.vault.on('create', cover));
+    this.registerEvent(this.app.vault.on('delete', cover));
     for (const [key, marks] of this.#tileMarks) this.#tiles.setMarks(marks, key);
     const { keymap } = this.app;
     this.registerDomEvent(body, 'focusin', () => keymap.pushScope(this.#keys.body));
@@ -241,6 +280,7 @@ export class GridView extends ItemView implements BubaGridView {
     this.registerEvent(this.app.vault.on('rename', (file, oldPath) => this.#renamed(file, oldPath)));
     this.register(
       this.#index.onChange(() => {
+        this.#faces?.clear();
         // Same path set means a content edit (a note autosave): records are kept and the frame tries to keep
         // the order; a new path set (added, deleted, moved, filled) takes the full path.
         const version = pathsVersionOf(this.#index);
@@ -373,6 +413,10 @@ export class GridView extends ItemView implements BubaGridView {
 
   pathsInOrder(): string[] {
     return this.#tiles?.pathsInOrder() ?? [];
+  }
+
+  frameCover(path: string, done: (frame: CoverFrame | null) => void): boolean {
+    return this.#tiles?.frameCover(path, done) ?? false;
   }
 
   tileRects(): TileRect[] {

@@ -10,7 +10,10 @@
 // label under the icon in its family color (src/core/format/family.ts), and such a tile has no corner badge,
 // only the label (tiles.css). The original is never put into a tile, except video and GIF on hover on
 // desktop, one per grid. Visible previews are requested first; justified rows and columns take the original's
-// proportions from the preview. Names are text only.
+// proportions from the preview. A folder tile looks like its row in the Buba tree: the tree's icon in the
+// folder color, and the name in that color while the tree colors names; its picture is the preview of a file
+// the view names (`FolderFace`: the cover or the folder's first picture), taken from the same preview store.
+// Names are text only.
 import { Platform, setIcon, type Plugin, type Vault } from 'obsidian';
 import {
   Virtualizer,
@@ -21,7 +24,7 @@ import {
 } from '@tanstack/virtual-core';
 import { colorCss } from '../../core/color/value.ts';
 import { t } from '../../core/i18n/dict/grid.ts';
-import { formatFamily, formatLabel } from '../../core/format/family.ts';
+import { formatFamily, formatInk, formatLabel } from '../../core/format/family.ts';
 import { badgeFits, type Size } from '../../core/layout/badge.ts';
 import { heldRow, heldRows, keptBreaks, rowAt, type HeldRow, type Row } from '../../core/layout/justified.ts';
 import { revealOffset } from '../../core/layout/reveal.ts';
@@ -40,6 +43,12 @@ import type { FileRecord } from '../../platform/files/file-index.ts';
 import { excerptStore, type ExcerptStore } from '../../platform/previews/excerpts.ts';
 import { excerptable, previewKind } from '../../platform/previews/plan.ts';
 import { previewStore, type PreviewStore } from '../../platform/previews/store.ts';
+import { settingsOf } from '../../platform/settings.ts';
+import { BACK_BOX, coverSize, FRONT_BOX, MIDDLE } from '../../core/layout/cover-frame.ts';
+import type { CoverFrame } from '../../core/storage/types.ts';
+import { startFraming } from './cover-frame.ts';
+import './file-tiles.css';
+import './folder-tiles.css';
 import './tiles.css';
 
 export type Tile = GridItem<FileRecord>;
@@ -65,6 +74,34 @@ export interface TilePlace {
   readonly path: string;
   readonly offset: number;
 }
+
+/**
+ * What a folder tile shows (view.ts, `setFolderFaces`): the tree row's look and the picture. `color` is
+ * already through `colorCss`, `contrast` holds `mod-low-contrast-<theme>` classes of that color, `picture` is
+ * a vault path whose preview fills the tile, or `null` for the icon.
+ */
+export interface FolderFace {
+  readonly icon: string;
+  readonly color: string | null;
+  readonly contrast: readonly string[];
+  readonly picture: string | null;
+  /** `picture` is the folder's own cover, not its first picture. */
+  readonly cover?: boolean;
+  /** How the own cover sits in the tile ("Move cover"); none means in the middle, just filling it. */
+  readonly frame?: CoverFrame | null;
+  /**
+   * Up to three files lying in the folder ("With files inside"), vault paths: pictures, and documents in their
+   * own proportions (their first page, else a blank page with the type).
+   */
+  readonly peeks?: readonly string[];
+}
+
+/** A folder tile without a face provider: the grey folder icon, no picture. */
+const PLAIN_FACE: FolderFace = { icon: 'folder', color: null, contrast: [], picture: null };
+
+/** Folder color classes on the tile element: tiles.css paints the icon and, under the tree setting, the name. */
+const FOLDER_COLOR = 'mod-folder-color';
+const LOW_CONTRAST = ['mod-low-contrast-light', 'mod-low-contrast-dark'];
 
 /** Tile class: an element has it while it shows a file or subfolder; pooled elements do not. */
 const TILE = 'buba-tile';
@@ -172,6 +209,10 @@ interface Stub {
   readonly format: boolean;
   readonly plate: string;
   readonly color: string;
+  /** Letters on the document silhouette instead of the icon (file-tiles.css); empty means the icon. */
+  readonly mark?: string;
+  /** Letter and icon color on the silhouette: on a light or dark fill, or the theme text on a neutral one. */
+  readonly ink?: 'light' | 'dark' | 'theme';
 }
 
 const FOLDER: Stub = { icon: 'folder', format: false, plate: '', color: '' };
@@ -179,12 +220,19 @@ const FOLDER: Stub = { icon: 'folder', format: false, plate: '', color: '' };
 function stubOf(tile: Tile): Stub {
   if (tile.kind === 'folder') return FOLDER;
   const { ext } = tile.file;
-  const { icon, color } = formatFamily(ext);
+  const { icon, color, mark } = formatFamily(ext);
   const plate = formatLabel(ext);
   const kind = previewKind(ext);
   if (kind === 'image' || kind === 'video' || plate === '')
     return { icon, format: false, plate: '', color: '' };
-  return { icon, format: true, plate, color: colorCss(color) ?? '' };
+  return { icon, format: true, plate, color: colorCss(color) ?? '', mark: mark ?? '', ink: formatInk(color) };
+}
+
+/** Extension of a vault path, without the dot; empty when the name has none. */
+function extOf(path: string): string {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
 }
 
 /** Format badge text; a folder has no badge, and CSS hides the empty one (`:empty`). */
@@ -227,10 +275,111 @@ interface Parts {
   color: string;
   /** The preview's `blob:` URL in `image`; empty means the icon shows. */
   url: string;
+  /** A folder tile: the path whose preview it shows (`FolderFace.picture`); empty for none and for files. */
+  picture: string;
+  /** A folder tile: the `--buba-color` value on the element; empty means no folder color. */
+  tint: string;
   marks: readonly string[];
   /** The badge is not hidden by the `badgeFits` rule. */
   badgeShown: boolean;
   place?: Place;
+  /** Folder shape parts, made when the element first shows a folder (folder-tiles.css). */
+  fold?: FoldParts;
+  /** A folder tile: the paths whose previews peek out of it, in card order. */
+  peeks: readonly string[];
+  /** Document silhouette parts, made when the element first shows a file without a picture (file-tiles.css). */
+  doc?: DocParts;
+}
+
+/** Folder shape over the tile picture: back plate, cards inside, slanted front, name. */
+interface FoldParts {
+  readonly cards: readonly {
+    readonly card: HTMLElement;
+    readonly image: HTMLImageElement;
+    readonly label: HTMLElement;
+  }[];
+  readonly name: HTMLElement;
+  /** Card content and place key per card, written only on change. */
+  readonly shown: string[];
+  /** The preview whose average color is on the tile (`#average`). */
+  average: string;
+  /** The cover's frame from the folder look, `null` for none (`#frame`). */
+  frame: CoverFrame | null;
+  /** The frame CSS written on the tile, to write only on change; empty for none. */
+  framed: string;
+}
+
+/** Document silhouette of a file without a picture: letters or the family icon, the type under them. */
+interface DocParts {
+  readonly root: HTMLElement;
+  readonly letters: HTMLElement;
+  readonly icon: HTMLElement;
+  readonly label: HTMLElement;
+  /** What is written now, so each part is written only on change; `null` before the first fill. */
+  mark: string | null;
+  drawn: string;
+  ink: string;
+  text: string;
+}
+
+/** Width over height of the document silhouette (file-tiles.css: `aspect-ratio: 0.8`). */
+const DOC_ASPECT = 0.8;
+
+/** A card place: offset from the center and down into the folder, % of the tile, and tilt, degrees. */
+type CardPlace = readonly [number, number, number];
+/**
+ * Places of 1, 2 and 3 cards, back to front: at rest a loose stack inside the folder, on hover a fan, both a
+ * little uneven (word of the owner 25.10).
+ */
+const CARD_REST: readonly (readonly CardPlace[])[] = [
+  [],
+  [[0, 12, -3]],
+  [
+    [-5, 12, -5],
+    [4, 10, 4],
+  ],
+  [
+    [-6, 13, -7],
+    [5, 9.5, 5],
+    [-1, 15.5, -2],
+  ],
+];
+const CARD_FAN: readonly (readonly CardPlace[])[] = [
+  [],
+  [[0, -6, -2]],
+  [
+    [-16, 0, -8],
+    [16, -3, 7],
+  ],
+  [
+    [-27, 0, -12],
+    [25, 2.5, 9],
+    [-2, -7, 2.5],
+  ],
+];
+/** A card fits a square of this share of the tile, %. */
+const CARD_BOX = 49;
+/** Width over height of a document card without a picture: a page. */
+const PAGE_ASPECT = 0.71;
+/** Average colors of folder pictures remembered, by preview URL. */
+const AVERAGES = 400;
+
+/** Average color of a decoded picture as `rgb(r g b)`, from an 8 × 8 copy; null where the canvas refuses. */
+function averageColor(image: HTMLImageElement): string | null {
+  const canvas = createEl('canvas');
+  canvas.width = canvas.height = 8;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return null;
+  try {
+    context.drawImage(image, 0, 0, 8, 8);
+    const data = context.getImageData(0, 0, 8, 8).data;
+    const sum = [0, 0, 0];
+    for (let at = 0; at < data.length; at += 4) for (let c = 0; c < 3; c++) sum[c]! += data[at + c]!;
+    const [r, g, b] = sum.map((value) => Math.round(value / (data.length / 4)));
+    return `rgb(${r} ${g} ${b})`;
+  } catch {
+    return null;
+  }
 }
 
 /** A tile's place in the grid body, px. */
@@ -355,6 +504,14 @@ const keptIn = (from: Waterfall, to: Waterfall): boolean =>
   from.extra === to.extra &&
   from.tall <= to.tall;
 
+/**
+ * The folder front's outline in the reference component's coordinates, the same path as the front mask in
+ * folder-tiles.css (`--buba-fold-front-mask`, raised part on the left; the CSS mirrors it to the right).
+ */
+const FOLD_VIEWBOX = '0 0 236.2 122.4';
+const FOLD_PATH =
+  'M104.615 0.350494L33.1297 0.838776C32.7542 0.841362 32.3825 0.881463 32.032 0.918854C31.6754 0.956907 31.3392 0.992086 31.0057 0.992096H31.0047C30.6871 0.99235 30.3673 0.962051 30.0272 0.929596C29.6927 0.897686 29.3384 0.863802 28.9803 0.866119L13.2693 0.967682H13.2527L13.2352 0.969635C13.1239 0.981406 13.0121 0.986674 12.9002 0.986237H9.91388C8.33299 0.958599 6.76052 1.22345 5.27423 1.76651H5.27325C4.33579 2.11246 3.48761 2.66213 2.7879 3.37393L2.49689 3.68839L2.492 3.69424C1.62667 4.73882 1.00023 5.96217 0.656067 7.27725C0.653324 7.28773 0.654065 7.29886 0.652161 7.30948C0.3098 8.62705 0.257231 10.0048 0.499817 11.3446L12.2147 114.399L12.2156 114.411L12.2176 114.423C12.6046 116.568 13.7287 118.508 15.3934 119.902C17.058 121.297 19.1572 122.056 21.3231 122.049V122.05H215.379C217.76 122.02 220.064 121.192 221.926 119.698V119.697C223.657 118.384 224.857 116.485 225.305 114.35L225.307 114.339L235.914 53.3798L235.968 53.1093L235.97 53.0985L235.971 53.0888C236.134 51.8978 236.044 50.685 235.705 49.5321C235.307 48.1669 234.63 46.9005 233.717 45.8144L233.383 45.4296C232.58 44.5553 231.614 43.8449 230.539 43.3398C229.311 42.7628 227.971 42.4685 226.616 42.4774H146.746C144.063 42.4705 141.423 41.8004 139.056 40.5263C136.691 39.2522 134.671 37.4127 133.175 35.1689L113.548 5.05948L113.544 5.05362L113.539 5.04776C112.545 3.65165 111.238 2.51062 109.722 1.72061C108.266 0.886502 106.627 0.422235 104.952 0.365143V0.364166L104.633 0.350494H104.615Z';
+
 export class TileGrid {
   readonly #scroller: HTMLElement;
   readonly #sizer: HTMLElement;
@@ -363,6 +520,7 @@ export class TileGrid {
   readonly #unmount: () => void;
   readonly #parts = new WeakMap<HTMLElement, Parts>();
   readonly #vault: Vault;
+  readonly #plugin: Plugin;
   readonly #previews: PreviewStore;
   readonly #excerpts: ExcerptStore;
   readonly #offExcerpt: () => void;
@@ -426,6 +584,8 @@ export class TileGrid {
   #requested = '';
   /** The tile under the mouse. */
   #hovered: HTMLElement | null = null;
+  /** Average colors of folder pictures by preview URL (`#average`). */
+  readonly #averages = new Map<string, string>();
   /**
    * The tile under the aimed mouse: the mouse moved over it (`mousemove`); the hold keeps it. A tile that
    * appeared or moved under a still cursor gets `mouseenter` from Obsidian without mouse movement; it is not
@@ -483,11 +643,15 @@ export class TileGrid {
   #stale: HTMLElement[] = [];
   /** Hidden spare tiles without tile class, path and marks, so a lookup by path finds only visible ones. */
   #pool: HTMLElement[] = [];
+  /** The folder whose cover "Move cover" is moving, with the frame so far; redraws of its tile keep it. */
+  #framing: { path: string; frame: CoverFrame; stop: () => void } | null = null;
   readonly #marks = new Map<string, (path: string) => string[]>();
   #markPending = false;
+  #faces: ((path: string) => FolderFace) | null = null;
 
   constructor(scroller: HTMLElement, plugin: Plugin) {
     this.#scroller = scroller;
+    this.#plugin = plugin;
     this.#vault = plugin.app.vault;
     this.#previews = previewStore(plugin);
     this.#offReady = this.#previews.onReady((path) => this.#previewReady(path));
@@ -724,6 +888,41 @@ export class TileGrid {
       top += height + GAP;
     }
     return rects;
+  }
+
+  /**
+   * Folder tile faces (`FolderFace`): applied to visible folder tiles at once and on every redraw; `null` gives
+   * the grey folder icon without a picture.
+   */
+  setFolderFaces(faces: ((path: string) => FolderFace) | null): void {
+    this.#faces = faces;
+    this.refreshFolders();
+  }
+
+  /**
+   * A folder's look or picture changed (the tree look, a cover, the folder content): visible folder tiles take
+   * their face again, and new pictures are requested with the next draw of a laid-out body.
+   */
+  refreshFolders(): void {
+    let folders = false;
+    for (const [index, el] of this.#shown) {
+      const item = this.#items[index];
+      if (item?.kind !== 'folder') continue;
+      folders = true;
+      this.#face(el, item);
+    }
+    if (!folders || this.#width === 0 || this.#pending !== null) return;
+    this.#requested = '';
+    this.#paint();
+  }
+
+  /**
+   * The "Program file tiles" setting changed: in rows and columns a file without a picture changes its
+   * proportion (document-shaped or square), so the layout is computed again, keeping the scroll place.
+   */
+  restyle(): void {
+    this.#aspectsOf = null;
+    if (byAspects(this.#look.layout) && this.#width > 0) this.#relayout(this.#hold(), true);
   }
 
   /** Tile marks: applied to visible tiles at once and on every redraw. */
@@ -1103,7 +1302,11 @@ export class TileGrid {
         wanted.set(index, { left: x, top, width: Math.round(PAD + left + width) - x, height, thumb: high });
         const item = this.#items[index];
         const seen = top + height > viewTop && top < viewBottom;
+        const face = item?.kind === 'folder' ? this.#faceOf(item.path) : null;
         if (item && hasPreview(item)) (seen ? inView : around).push(item.path);
+        else if (face?.picture) (seen ? inView : around).push(face.picture);
+        for (const peek of face?.peeks ?? [])
+          if (peek !== face?.picture && previewKind(extOf(peek)) !== null) around.push(peek);
       });
     }
     const spare = new Set(this.#stale);
@@ -1147,6 +1350,7 @@ export class TileGrid {
     for (const [index, el] of shown) {
       const item = this.#items[index]!;
       this.#mark(el, item.path);
+      if (item.kind === 'folder') this.#face(el, item);
       this.#fitBadge(el, item, wanted.get(index)!);
     }
     for (const el of spare) {
@@ -1211,8 +1415,11 @@ export class TileGrid {
       format: false,
       color: '',
       url: '',
+      picture: '',
+      tint: '',
       marks: NO_MARKS,
       badgeShown: true,
+      peeks: [],
     });
     // Phones have no hover playback.
     if (Platform.isDesktop) {
@@ -1240,9 +1447,14 @@ export class TileGrid {
     if (this.#hovered === el) this.#hovered = null;
     if (this.#aimed === el) this.#aimed = null;
     el.hide();
-    el.removeClasses([TILE, 'is-folder', ...parts.marks]);
+    if (this.#framing && el.dataset.path === this.#framing.path) this.#framing.stop();
+    el.removeClasses([TILE, 'is-folder', 'has-cover', 'has-frame', ...parts.marks]);
+    if (parts.fold) parts.fold.framed = '';
+    parts.peeks = [];
     el.removeAttribute('data-path');
     parts.marks = NO_MARKS;
+    parts.picture = '';
+    this.#tint(el, parts, PLAIN_FACE);
     this.#setPreview(el, '');
   }
 
@@ -1253,7 +1465,10 @@ export class TileGrid {
     el.dataset.path = item.path;
     el.toggleClass('is-folder', item.kind === 'folder');
     parts.folder = item.kind === 'folder';
-    this.#fillStub(parts, stubOf(item));
+    const face = item.kind === 'folder' ? this.#faceOf(item.path) : PLAIN_FACE;
+    this.#fillStub(parts, item.kind === 'folder' ? { ...FOLDER, icon: face.icon } : stubOf(item));
+    this.#tint(el, parts, face);
+    parts.picture = face.picture ?? '';
     const format = formatOf(item);
     if (parts.badge.textContent !== format) parts.badge.textContent = format;
     const name = item.kind === 'file' ? item.file.name : item.name;
@@ -1283,6 +1498,47 @@ export class TileGrid {
       parts.thumb.setCssProps({ '--buba-format-color': stub.color });
       parts.color = stub.color;
     }
+    if (stub.format) this.#fillDoc(parts, stub);
+  }
+
+  /**
+   * The document silhouette of a file without a picture: its letters ("Ps") or the family icon, and the ink
+   * class; the fill is `--buba-format-color` and the type is the label (file-tiles.css). Made on first use,
+   * written only on change.
+   */
+  #fillDoc(parts: Parts, stub: Stub): void {
+    const mark = stub.mark ?? '';
+    const ink = stub.ink ?? 'theme';
+    let doc = parts.doc;
+    if (!doc) {
+      const root = parts.thumb.createDiv({ cls: 'buba-tile-doc' });
+      root.createDiv({ cls: 'buba-doc-ring' }).createDiv();
+      root.createDiv({ cls: 'buba-doc-body' });
+      root.createDiv({ cls: 'buba-doc-fold' });
+      const letters = root.createDiv({ cls: 'buba-doc-letters' });
+      const icon = root.createDiv({ cls: 'buba-doc-icon' });
+      const label = root.createDiv({ cls: 'buba-doc-label' });
+      doc = parts.doc = { root, letters, icon, label, mark: null, drawn: '', ink: '', text: '' };
+    }
+    if (doc.mark !== mark) {
+      doc.mark = mark;
+      doc.letters.textContent = mark;
+      doc.root.toggleClass('mod-letters', mark !== '');
+    }
+    // The icon is drawn only while it shows: scrolling through Photoshop files never calls `setIcon`.
+    if (mark === '' && doc.drawn !== stub.icon) {
+      doc.drawn = stub.icon;
+      setIcon(doc.icon, stub.icon);
+    }
+    if (doc.ink !== ink) {
+      if (doc.ink) doc.root.removeClass(`mod-ink-${doc.ink}`);
+      doc.ink = ink;
+      doc.root.addClass(`mod-ink-${ink}`);
+    }
+    if (doc.text !== stub.plate) {
+      doc.text = stub.plate;
+      doc.label.textContent = stub.plate;
+    }
   }
 
   /**
@@ -1291,7 +1547,8 @@ export class TileGrid {
    */
   #showPreview(el: HTMLElement, item: Tile): void {
     const file = item.kind === 'file';
-    const url = (file && this.#previews.get(item.path)?.url) || '';
+    const picture = file ? item.path : this.#parts.get(el)!.picture;
+    const url = (picture && this.#previews.get(picture)?.url) || '';
     const text = (file && excerptable(item.file.ext) && this.#excerpts.get(item.path)) || '';
     this.#setPreview(el, url, text);
   }
@@ -1308,6 +1565,8 @@ export class TileGrid {
       parts.url = url;
       if (url) parts.image.src = url;
       else parts.image.removeAttribute('src');
+      this.#average(el, parts);
+      this.#frame(el, parts);
     }
     if (parts.excerpt !== text) {
       parts.excerpt = text;
@@ -1331,7 +1590,9 @@ export class TileGrid {
     const known = this.#knownAspects.get(item.path);
     if (known !== undefined) return known;
     const preview = this.#previews.get(item.path);
-    if (!preview) return 1;
+    // A file without a picture as a whole-tile silhouette stands in a document-shaped tile (file-tiles.css).
+    if (!preview)
+      return stubOf(item).format && settingsOf(this.#plugin).fileTile === 'shape' ? DOC_ASPECT : 1;
     const aspect = preview.width / preview.height;
     this.#knownAspects.set(item.path, aspect);
     return aspect;
@@ -1357,6 +1618,7 @@ export class TileGrid {
     // the old one.
     const aspect = preview.width / preview.height;
     this.#knownAspects.set(path, aspect);
+    this.#pictureChanged(path);
     const index = this.#indexOf(path);
     if (index === undefined) return;
     const el = this.#shown.get(index);
@@ -1447,6 +1709,7 @@ export class TileGrid {
    */
   #previewRemoved(path: string): void {
     this.#knownAspects.delete(path);
+    this.#pictureChanged(path);
     const index = this.#indexOf(path);
     const el = index === undefined ? undefined : this.#shown.get(index);
     if (el) this.#showPreview(el, this.#items[index!]!);
@@ -1876,6 +2139,250 @@ export class TileGrid {
     // Without load() after removing src, a video keeps its decoder and the file open.
     if (video) (media as HTMLVideoElement).load();
     media.remove();
+  }
+
+  #faceOf(path: string): FolderFace {
+    return this.#faces?.(path) ?? PLAIN_FACE;
+  }
+
+  /** A visible folder tile takes its face: icon, color and picture, only what changed. */
+  #face(el: HTMLElement, item: Tile): void {
+    const parts = this.#parts.get(el)!;
+    const face = this.#faceOf(item.path);
+    this.#fillStub(parts, { ...FOLDER, icon: face.icon });
+    this.#tint(el, parts, face);
+    this.#fold(el, parts, item, face);
+    const picture = face.picture ?? '';
+    if (parts.picture === picture) return;
+    parts.picture = picture;
+    this.#showPreview(el, item);
+  }
+
+  /**
+   * The folder shape over the tile picture (folder-tiles.css): made the first time the element shows a
+   * folder; then the name inside, `has-cover` for the folder's own cover, and the peeking cards from the
+   * preview store. A card without a preview yet stays hidden until `#pictureChanged`.
+   */
+  #fold(el: HTMLElement, parts: Parts, item: Tile, face: FolderFace): void {
+    let fold = parts.fold;
+    if (!fold) {
+      const { thumb } = parts;
+      thumb.createDiv({ cls: 'buba-fold-back' });
+      const deck = thumb.createDiv({ cls: 'buba-fold-peeks' });
+      const cards = [0, 1, 2].map(() => {
+        const card = deck.createDiv({ cls: 'buba-fold-peek' });
+        const image = card.createEl('img', { attr: { alt: '' } });
+        const label = card.createSpan({ cls: 'buba-fold-page' });
+        return { card, image, label };
+      });
+      thumb.createDiv({ cls: 'buba-fold-front' });
+      thumb.createDiv({ cls: 'buba-fold-shade' });
+      // The selection line: the front's own path stroked in an SVG of the front's size, a stroke of one width
+      // on every edge and curve (folder-tiles.css).
+      thumb
+        .createDiv({ cls: 'buba-fold-front-ring' })
+        .createSvg('svg', { attr: { viewBox: FOLD_VIEWBOX, preserveAspectRatio: 'none' } })
+        .createSvg('path', { attr: { d: FOLD_PATH, 'vector-effect': 'non-scaling-stroke' } });
+      const name = thumb.createDiv({ cls: 'buba-fold-name' });
+      fold = parts.fold = { cards, name, shown: ['', '', ''], average: '', frame: null, framed: '' };
+    }
+    const name = item.kind === 'folder' ? item.name : '';
+    if (fold.name.textContent !== name) fold.name.textContent = name;
+    el.toggleClass('has-cover', face.cover === true);
+    fold.frame = face.frame ?? null;
+    parts.peeks = face.peeks ?? [];
+    this.#showPeeks(parts);
+    this.#average(el, parts);
+    this.#frame(el, parts);
+  }
+
+  /**
+   * A moved cover (`FolderFace.frame`, or the frame being set by "Move cover"): `has-frame`, and the picture as
+   * the background of the back plate or the front, placed and sized by the frame (folder-tiles.css); written
+   * only on change. Needs the preview's size, so it waits for the preview.
+   */
+  #frame(el: HTMLElement, parts: Parts): void {
+    const fold = parts.fold;
+    if (!fold) return;
+    const framing =
+      this.#framing !== null && this.#framing.path === el.dataset.path ? this.#framing.frame : null;
+    const frame = framing ?? fold.frame;
+    const preview = (parts.picture && this.#previews.get(parts.picture)) || null;
+    const on = frame !== null && el.hasClass('has-cover') && parts.url !== '' && preview !== null;
+    if (!on) {
+      if (fold.framed !== '') el.removeClass('has-frame');
+      fold.framed = '';
+      return;
+    }
+    const aspect = preview.width / preview.height;
+    const back = coverSize(aspect, BACK_BOX, frame.zoom);
+    const front = coverSize(aspect, FRONT_BOX, frame.zoom);
+    const props = {
+      '--buba-cover-url': `url("${parts.url}")`,
+      '--buba-cover-pos': `${frame.x}% ${frame.y}%`,
+      '--buba-cover-back': `${back.w}% ${back.h}%`,
+      '--buba-cover-front': `${front.w}% ${front.h}%`,
+    };
+    const key = Object.values(props).join('|');
+    if (fold.framed === key) return;
+    fold.framed = key;
+    el.addClass('has-frame');
+    el.setCssProps(props);
+  }
+
+  /**
+   * "Move cover" on the shown tile of folder `path`: the tile takes drags and the wheel until Enter, Esc or a
+   * press elsewhere (cover-frame.ts); `done` gets the kept frame, or `null` when cancelled. `false` when the
+   * grid does not show the folder with its cover.
+   */
+  frameCover(path: string, done: (frame: CoverFrame | null) => void): boolean {
+    const index = this.#indexOf(path);
+    const el = index === undefined ? undefined : this.#shown.get(index);
+    const parts = el && this.#parts.get(el);
+    if (!el || !parts?.fold || !el.hasClass('has-cover')) return false;
+    this.#framing?.stop();
+    const state = { path, frame: parts.fold.frame ?? MIDDLE, stop: () => {} };
+    this.#framing = state;
+    const front = () => settingsOf(this.#plugin).folderCover === 'front';
+    const shownEl = (): HTMLElement | undefined => {
+      const at = this.#indexOf(path);
+      const shown = at === undefined ? undefined : this.#shown.get(at);
+      return shown?.dataset.path === path ? shown : undefined;
+    };
+    const aspect = (): number => {
+      const preview = this.#previews.get(parts.picture);
+      return preview ? preview.width / preview.height : 1;
+    };
+    state.stop = startFraming(el, state.frame, {
+      box: () =>
+        shownEl()?.querySelector<HTMLElement>(front() ? '.buba-fold-front' : '.buba-fold-back') ?? null,
+      size: (frame) => coverSize(aspect(), front() ? FRONT_BOX : BACK_BOX, frame.zoom),
+      apply: (frame) => {
+        state.frame = frame;
+        const shown = shownEl();
+        if (shown) this.#frame(shown, this.#parts.get(shown)!);
+      },
+      done: (frame) => {
+        if (this.#framing === state) this.#framing = null;
+        // Drawn with the kept frame until the folder look brings it back from storage.
+        if (frame) parts.fold!.frame = frame;
+        done(frame);
+        const shown = shownEl();
+        if (shown) this.#frame(shown, this.#parts.get(shown)!);
+      },
+    });
+    return true;
+  }
+
+  /**
+   * The folder picture's average color as `--buba-fold-average`, for the back plate behind a cover in front
+   * in the cover's color (folder-tiles.css): counted only under those settings, once per preview, from a small
+   * copy; the last previews are remembered.
+   */
+  #average(el: HTMLElement, parts: Parts): void {
+    const fold = parts.fold;
+    const url = parts.url;
+    const settings = settingsOf(this.#plugin);
+    if (!fold || fold.average === url || settings.folderCover !== 'front' || settings.folderPlate !== 'cover')
+      return;
+    fold.average = url;
+    if (!url) return;
+    const known = this.#averages.get(url);
+    if (known) {
+      el.setCssProps({ '--buba-fold-average': known });
+      return;
+    }
+    const probe = createEl('img');
+    probe.onload = () => {
+      const color = averageColor(probe);
+      if (!color) return;
+      this.#averages.set(url, color);
+      if (this.#averages.size > AVERAGES) this.#averages.delete(this.#averages.keys().next().value!);
+      if (parts.url === url) el.setCssProps({ '--buba-fold-average': color });
+    };
+    probe.src = url;
+  }
+
+  /** "Folder cover" or "Behind a cover in front" changed: the shown folders count their colors now. */
+  recolor(): void {
+    for (const el of this.#shown.values()) this.#average(el, this.#parts.get(el)!);
+  }
+
+  /**
+   * Cards in the folder: a picture or a document's first page in its own proportions, a document without a
+   * preview as a page with its type; a picture whose preview has not come yet waits. Places by the count
+   * (`CARD_REST`, `CARD_FAN`), written only on change.
+   */
+  #showPeeks(parts: Parts): void {
+    const fold = parts.fold;
+    if (!fold) return;
+    const ready = parts.peeks.flatMap(
+      (path): { url: string; aspect: number; page: string; color: string }[] => {
+        const preview = this.#previews.get(path);
+        if (preview)
+          return [{ url: preview.url, aspect: preview.width / preview.height || 1, page: '', color: '' }];
+        const ext = extOf(path);
+        if (previewKind(ext) !== null) return [];
+        const page = formatLabel(ext) || ext.toUpperCase();
+        return [{ url: '', aspect: PAGE_ASPECT, page, color: colorCss(formatFamily(ext).color) ?? '' }];
+      },
+    );
+    const rest = CARD_REST[ready.length]!;
+    const fan = CARD_FAN[ready.length]!;
+    fold.cards.forEach(({ card, image, label }, at) => {
+      const shown = ready[at];
+      const key = shown ? `${shown.url}|${shown.page}|${shown.aspect.toFixed(3)}|${ready.length}` : '';
+      if (fold.shown[at] === key) return;
+      fold.shown[at] = key;
+      card.toggleClass('is-shown', shown !== undefined);
+      card.toggleClass('is-page', shown !== undefined && shown.url === '');
+      if (!shown) {
+        image.removeAttribute('src');
+        return;
+      }
+      const width = shown.aspect >= 1 ? CARD_BOX : CARD_BOX * shown.aspect;
+      const [rx, ry, rr] = rest[at]!;
+      const [fx, fy, fr] = fan[at]!;
+      card.setCssProps({
+        '--buba-peek-w': `${width.toFixed(1)}%`,
+        '--buba-peek-h': `${(width / shown.aspect).toFixed(1)}%`,
+        '--buba-peek-x': `${rx}%`,
+        '--buba-peek-y': `${ry}%`,
+        '--buba-peek-r': `${rr}deg`,
+        '--buba-fan-x': `${fx}%`,
+        '--buba-fan-y': `${fy}%`,
+        '--buba-fan-r': `${fr}deg`,
+        '--buba-format-color': shown.color,
+      });
+      if (shown.url) image.src = shown.url;
+      else image.removeAttribute('src');
+      if (label.textContent !== shown.page) label.textContent = shown.page;
+    });
+  }
+
+  /**
+   * Folder color on the tile element, as on the tree row: `mod-folder-color`, `--buba-color` and the contrast
+   * classes; a file tile and a folder without a color have none.
+   */
+  #tint(el: HTMLElement, parts: Parts, face: FolderFace): void {
+    const tint = face.color ?? '';
+    if (parts.tint !== tint) {
+      parts.tint = tint;
+      el.toggleClass(FOLDER_COLOR, tint !== '');
+      el.setCssProps({ '--buba-color': tint });
+    }
+    for (const cls of LOW_CONTRAST) el.toggleClass(cls, tint !== '' && face.contrast.includes(cls));
+  }
+
+  /** A preview came or went for a path that visible folder tiles show as their picture. */
+  #pictureChanged(path: string): void {
+    for (const [index, el] of this.#shown) {
+      const item = this.#items[index];
+      if (item?.kind !== 'folder') continue;
+      const parts = this.#parts.get(el)!;
+      if (parts.picture === path) this.#showPreview(el, item);
+      if (parts.peeks.includes(path)) this.#showPeeks(parts);
+    }
   }
 
   #mark(el: HTMLElement, path: string): void {

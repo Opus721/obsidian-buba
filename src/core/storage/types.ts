@@ -19,6 +19,64 @@ export const JOURNAL_DIR = '__buba-data';
  */
 export const LEGACY_JOURNAL_DIR = 'Buba';
 
+/**
+ * Folder covers: picture files named by `isCoverName`, written by any device and never changed after. Inside
+ * the data folder, so the file index and the grid never show them as content; a subfolder, so `readAll` (only
+ * `.jsonl` directly in a data folder) does not read them.
+ */
+export const COVERS_DIR = `${JOURNAL_DIR}/covers`;
+
+/**
+ * Cover file name in `COVERS_DIR`: 8–32 characters `[a-z0-9]` and a picture extension. A name, not a path: it
+ * comes from journals, which a newer build or another device wrote, and goes into a vault path, so `/` and
+ * `..` never pass.
+ */
+export function isCoverName(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z0-9]{8,32}\.(?:webp|jpg|png)$/.test(value);
+}
+
+/** Vault path of cover `name` (`isCoverName`). */
+export const coverPath = (name: string): string => `${COVERS_DIR}/${name}`;
+
+/**
+ * How a cover sits in its folder tile, set by "Move cover": where the visible part lies across the picture
+ * (`x`, `y` in percent, like `background-position`: 0 the left or top edge, 50 the middle, 100 the right or
+ * bottom edge) and how much larger than just filling the tile the picture is (`zoom`, 1–4).
+ */
+export interface CoverFrame {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+const FRAME_TEXT = /^(\d{1,3}(?:\.\d)?) (\d{1,3}(?:\.\d)?) (\d(?:\.\d{1,2})?)$/;
+
+/**
+ * A frame as stored in a journal: `"x y zoom"`, `x` and `y` with at most one decimal, `zoom` with at most
+ * two. One text per frame, so the same frame is never written twice and lines compare as strings.
+ */
+export function isCoverFrame(value: unknown): value is string {
+  return typeof value === 'string' && parseCoverFrame(value) !== null;
+}
+
+/** The frame of a stored text, `null` if it is not one (`isCoverFrame`). */
+export function parseCoverFrame(text: string): CoverFrame | null {
+  const match = FRAME_TEXT.exec(text);
+  if (!match) return null;
+  const [x, y, zoom] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  if (x > 100 || y > 100 || zoom < 1 || zoom > 4) return null;
+  return { x, y, zoom };
+}
+
+/** The stored text of a frame, clamped to its ranges and rounded. */
+export function coverFrameText(frame: CoverFrame): string {
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  const x = Math.round(clamp(frame.x, 0, 100) * 10) / 10;
+  const y = Math.round(clamp(frame.y, 0, 100) * 10) / 10;
+  const zoom = Math.round(clamp(frame.zoom, 1, 4) * 100) / 100;
+  return `${x} ${y} ${zoom}`;
+}
+
 /** Both data folders, the new one first. */
 export const DATA_DIRS: readonly string[] = [JOURNAL_DIR, LEGACY_JOURNAL_DIR];
 
@@ -188,10 +246,16 @@ export interface FileLinks {
   setLink(path: string, url: string | null): Promise<void>;
 }
 
-/** Folder look in the Buba tree: icon color and Lucide icon (`isIconId`); `null` if never set or removed. */
+/**
+ * Folder look: icon color and Lucide icon (`isIconId`) of the Buba tree and the folder tile, and the cover of
+ * the folder tile in the grid (`isCoverName`, a file in `COVERS_DIR`); `null` if never set or removed.
+ */
 export interface FolderLook {
   color: ColorValue | null;
   icon: string | null;
+  cover: string | null;
+  /** How the cover sits in the tile (`isCoverFrame`), `null` for centered and filling it. */
+  frame: string | null;
 }
 
 /**
@@ -200,7 +264,7 @@ export interface FolderLook {
  * wake look subscribers.
  */
 export interface FolderLooks {
-  /** Both fields `null` if there is no look. */
+  /** All fields `null` if there is no look. */
   folderLook(path: string): FolderLook;
   /**
    * `null` removes it; an invalid path or color is refused before writing; the same value
@@ -212,6 +276,18 @@ export interface FolderLooks {
    * is not written again.
    */
   setFolderIcon(path: string, icon: string | null): Promise<void>;
+  /**
+   * Cover file name (`isCoverName`), written to `COVERS_DIR` beforehand; `null` removes the cover. An invalid
+   * path or name is refused before writing; the same value is not written again.
+   */
+  setFolderCover(path: string, cover: string | null): Promise<void>;
+  /**
+   * Cover frame (`isCoverFrame`); `null` puts the cover back in the middle. An invalid path or frame is
+   * refused before writing; the same value is not written again.
+   */
+  setFolderFrame(path: string, frame: string | null): Promise<void>;
+  /** Whether any folder's look names cover file `name`: an unused one can go to the trash. */
+  coverInUse(name: string): boolean;
   /** The listener receives paths of folders whose look changed; returns an unsubscribe function. */
   onFolderLook(listener: (paths: string[]) => void): () => void;
 }
@@ -303,7 +379,9 @@ export type MetaAction =
   | { op: 'meta.set'; kind: 'tag'; key: string; field: 'declared'; value: string | false }
   | { op: 'meta.set'; kind: 'palette'; key: ColorValue; field: 'pinned'; value: boolean }
   | { op: 'meta.set'; kind: 'folder'; key: string; field: 'color'; value: ColorValue | null }
-  | { op: 'meta.set'; kind: 'folder'; key: string; field: 'icon'; value: string | null };
+  | { op: 'meta.set'; kind: 'folder'; key: string; field: 'icon'; value: string | null }
+  | { op: 'meta.set'; kind: 'folder'; key: string; field: 'cover'; value: string | null }
+  | { op: 'meta.set'; kind: 'folder'; key: string; field: 'frame'; value: string | null };
 
 /** Line head: `v` schema version, `at` ISO 8601 UTC, `dev` device id. */
 interface LineHead {

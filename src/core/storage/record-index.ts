@@ -180,7 +180,7 @@ export class RecordIndex implements Pick<
    * spelling of a declared tag is in `spelling`.
    */
   private declared = new Map<string, boolean>();
-  /** Folder looks: folder path -> color and icon; no key if there is no look. */
+  /** Folder looks: folder path -> color, icon and cover; no key if there is no look. */
   private looks = new Map<string, FolderLook>();
   /** Reference path -> records whose passport names it. */
   private refs = new Map<string, Set<Entry>>();
@@ -431,10 +431,15 @@ export class RecordIndex implements Pick<
     return out;
   }
 
-  /** Folder look by its path; both fields `null` if there is none. */
+  /** Folder look by its path; all fields `null` if there is none. */
   folderLook(path: string): FolderLook {
     const look = this.looks.get(path);
-    return { color: look?.color ?? null, icon: look?.icon ?? null };
+    return {
+      color: look?.color ?? null,
+      icon: look?.icon ?? null,
+      cover: look?.cover ?? null,
+      frame: look?.frame ?? null,
+    };
   }
 
   /** Paths of folders with a look. */
@@ -617,9 +622,9 @@ export class RecordIndex implements Pick<
       }
       case 'meta.set':
         if (line.kind === 'folder') {
-          const { color, icon } = this.folderLook(line.key);
-          const look = line.field === 'color' ? { color: line.value, icon } : { color, icon: line.value };
-          if (look.color === null && look.icon === null) this.looks.delete(line.key);
+          const look = { ...this.folderLook(line.key), [line.field]: line.value };
+          if (look.color === null && look.icon === null && look.cover === null && look.frame === null)
+            this.looks.delete(line.key);
           else this.looks.set(line.key, look);
         } else if (line.kind === 'palette') {
           if (line.value) this.pinned.set(line.key, step);

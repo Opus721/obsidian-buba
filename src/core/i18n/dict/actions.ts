@@ -209,6 +209,20 @@ const en = {
   filesHere: 'Here: files…',
   pickNotOpened:
     'The file picker opens only on a click or tap: open a folder in Buba and click the "{action}" icon in the grid header.',
+
+  // Folder covers.
+  uploadCover: 'Upload cover…',
+  removeCover: 'Remove cover',
+  moveCover: 'Move cover',
+  centerCover: 'Center cover',
+  moveCoverHint:
+    'Drag to move the cover, scroll or pinch to zoom. Enter or a click outside keeps it, Esc cancels.',
+  coverFrameFailed: 'The position of the cover of “{folder}” was not saved: {error}',
+  makeCover: 'Make folder cover',
+  coverFailed: 'Couldn\'t set the cover of folder "{folder}" — {error}',
+  coverRemoveFailed: 'Couldn\'t remove the cover of folder "{folder}"',
+  coverPickNotOpened:
+    'The file picker opens only on a click or tap: right-click the folder tile again and choose "{action}".',
 };
 
 export type ActionsSource = typeof en;
@@ -496,6 +510,18 @@ export const strings: Dictionary<ActionsSource> = {
     filesHere: 'Сюда: файлы…',
     pickNotOpened:
       'Окно выбора файлов открывается только по нажатию: откройте папку в Buba и нажмите значок «{action}» в шапке сетки.',
+    uploadCover: 'Загрузить обложку…',
+    removeCover: 'Убрать обложку',
+    moveCover: 'Подвинуть обложку',
+    centerCover: 'Обложку по центру',
+    moveCoverHint:
+      'Тяните, чтобы сдвинуть обложку, колесом или двумя пальцами меняйте крупность. Enter или щелчок мимо сохраняет, Esc отменяет.',
+    coverFrameFailed: 'Положение обложки «{folder}» не сохранилось: {error}',
+    makeCover: 'Сделать обложкой папки',
+    coverFailed: 'Не удалось поставить обложку папки «{folder}» — {error}',
+    coverRemoveFailed: 'Не удалось убрать обложку папки «{folder}»',
+    coverPickNotOpened:
+      'Окно выбора файлов открывается только по нажатию: снова нажмите правой кнопкой на плитку папки и выберите «{action}».',
   },
 };
 

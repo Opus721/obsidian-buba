@@ -4,6 +4,7 @@ import type { Plugin } from 'obsidian';
 import type { BubaAssets } from '../api.ts';
 import { registerSelection } from '../grid/selection.ts';
 import { registerViewerOpen } from '../viewer/open.ts';
+import { registerCoverMenu } from './cover-menu.ts';
 import { registerFileMenu } from './file-menu.ts';
 import { registerImportDrop } from './import-drop.ts';
 import { registerImportPick } from './import-pick.ts';
@@ -16,6 +17,8 @@ import { registerUndo } from './undo.ts';
 export function registerActions(plugin: Plugin, assets: BubaAssets): void {
   registerSelection(plugin, assets);
   registerFileMenu(plugin, assets);
+  // Before the menu items: its `file-menu` listener runs first, so the cover items go above "Delete".
+  registerCoverMenu(plugin, assets);
   registerMenuItems(plugin, assets);
   registerViewerOpen(plugin, assets);
   registerTileDrag(plugin, assets);

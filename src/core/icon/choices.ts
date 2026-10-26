@@ -2,13 +2,19 @@
 // is the Lucide icons built into Obsidian (`getIconIds()`, names prefixed `lucide-`); plugin icons and
 // Obsidian's own are not offered. The default is the constant `lucide-folder-open`, grey, because that is how
 // Obsidian draws its own `folder` (alias table in app.js 1.13.7 and 1.14.4); it has no separate row in the
-// list, since "Folder (default)" writes `null`. Names are English, Obsidian has no translations for them, so
+// list, since "Folder (default)" writes `null`. A tree row shows the default open only while the folder is
+// expanded; collapsed, or without subfolders, it is the closed `lucide-folder`, so the icon itself tells the
+// state, as the arrow does (`treeFolderIcon`). A folder's own icon has no closed form and stays as it is.
+// Names are English, Obsidian has no translations for them, so
 // search is in English. No `obsidian` import.
 import { t } from '../i18n/dict/tree.ts';
 import { isIconId } from './icon-id.ts';
 
 /** Icon for folders without their own icon or with one this Obsidian lacks, and for the default row. */
 export const DEFAULT_FOLDER_ICON = 'lucide-folder-open';
+
+/** The default icon of a collapsed tree row or one without subfolders. */
+export const CLOSED_FOLDER_ICON = 'lucide-folder';
 
 /** Icon window row: a Lucide icon or `null` for the default; the window searches and shows `text`. */
 export interface IconChoice {
@@ -45,4 +51,10 @@ export function iconChoices(ids: Iterable<string>): IconChoice[] {
  */
 export function folderIcon(icon: string | null, known: (id: string) => boolean): string {
   return isIconId(icon) && known(icon) ? icon : DEFAULT_FOLDER_ICON;
+}
+
+/** A tree row's icon: `folderIcon`, with the default closed unless the row is expanded. */
+export function treeFolderIcon(icon: string | null, known: (id: string) => boolean, open: boolean): string {
+  const id = folderIcon(icon, known);
+  return id === DEFAULT_FOLDER_ICON && !open ? CLOSED_FOLDER_ICON : id;
 }

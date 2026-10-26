@@ -2,6 +2,7 @@
 // plus access to open grid views. src/assets/index.ts creates the object and passes it to each module's
 // `register…(plugin, assets)`. No `obsidian` at runtime: the registries are tested with a fake host.
 import type { Menu, Scope } from 'obsidian';
+import type { CoverFrame } from '../core/storage/types.ts';
 import type { FileRecord } from '../platform/files/file-index.ts';
 
 export interface FolderSource {
@@ -56,6 +57,8 @@ export interface TreeItem {
   id: string;
   title: string;
   icon?: string;
+  /** Icon while the item is expanded; `icon` while it is collapsed. */
+  openIcon?: string;
   /** Without it a click on the item only expands it. */
   source?: GridSource;
   /** Re-read on the item's signal. */
@@ -107,6 +110,11 @@ export interface BubaGridView {
   refresh(): void;
   /** Scrolls the tile of `path` into view if it is not fully visible; a path the grid does not show is ignored. */
   reveal(path: string): void;
+  /**
+   * "Move cover" on the shown tile of folder `path` with a cover: drags move it, the wheel zooms; Enter or a
+   * press elsewhere ends it with the frame, Esc with `null`. `false` when this grid does not show that tile.
+   */
+  frameCover?(path: string, done: (frame: CoverFrame | null) => void): boolean;
   /** Set by the selection module. */
   selectedPaths?: () => string[];
   /**

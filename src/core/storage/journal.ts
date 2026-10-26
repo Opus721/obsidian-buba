@@ -7,6 +7,8 @@ import { isLinkUrl } from './link.ts';
 import { readPassportLine } from './passport.ts';
 import {
   SCHEMA_VERSION,
+  isCoverFrame,
+  isCoverName,
   isDeviceId,
   isFolderPath,
   normalizeTag,
@@ -46,7 +48,8 @@ const known = (line: KnownLine | false): ParsedLine => (line ? { kind: 'line', l
  * is a non-empty tag, a pinned color key is the color itself. A tag declaration is its spelling after
  * `normalizeTag` with the same key as the line, or `false` when deleted. Folder look: the key is a
  * folder path (`isFolderPath`), the color as for a tag, the icon `isIconId` or `null`, since its name
- * goes into `setIcon`.
+ * goes into `setIcon`, the cover `isCoverName` or `null`, since its name goes into a vault path, the cover frame
+ * `isCoverFrame` or `null`. Builds before covers take a cover or frame line as unknown and skip it.
  */
 function meta(raw: Record<string, unknown>): MetaAction | false | null {
   const { kind, key, field, value } = raw;
@@ -75,6 +78,10 @@ function meta(raw: Record<string, unknown>): MetaAction | false | null {
     if (field === 'color') return folder && color && { op: 'meta.set', kind, key, field, value };
     if (field === 'icon')
       return folder && (value === null || isIconId(value)) && { op: 'meta.set', kind, key, field, value };
+    if (field === 'cover')
+      return folder && (value === null || isCoverName(value)) && { op: 'meta.set', kind, key, field, value };
+    if (field === 'frame')
+      return folder && (value === null || isCoverFrame(value)) && { op: 'meta.set', kind, key, field, value };
     return typeof field === 'string' ? null : false;
   }
   return typeof kind === 'string' ? null : false;

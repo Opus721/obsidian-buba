@@ -6,8 +6,12 @@
 // raised in OKLCh at the same hue. Archives and fonts use Obsidian theme presets (`--color-<name>`); the rest
 // are neutral (src/core/color/value.ts, `colorCss`). Icons come from Obsidian's Lucide set: `setIcon`
 // silently draws nothing for an unknown name and silently swaps an old name from Obsidian's alias map
-// (`presentation` becomes a monitor), so such names are written with `lucide-`. No `obsidian` import.
-import type { ColorValue } from '../color/value.ts';
+// (`presentation` becomes a monitor), so such names are written with `lucide-`. In the grid's document
+// silhouette (src/assets/grid/file-tiles.css) a family may show short letters instead of the icon (`mark`:
+// "Ps", "Ae"…), set as text in Buba's own document shape: an abbreviation of the format, not the
+// application's logo, which is still never drawn. No `obsidian` import.
+import { luminance } from '../color/contrast.ts';
+import { PRESET_COLORS, type ColorValue } from '../color/value.ts';
 
 export type FormatFamilyId =
   | 'photoshop'
@@ -50,6 +54,8 @@ export interface FormatFamily {
   readonly icon: string;
   /** Application `#rrggbb` or an Obsidian theme preset; `null` is a neutral label in the text color. */
   readonly color: ColorValue | null;
+  /** Letters on the document silhouette instead of the icon; absent means the icon. */
+  readonly mark?: string;
 }
 
 /**
@@ -61,19 +67,19 @@ export interface FormatFamily {
  * (Premiere caches and lock, XMP) are neutral with a service-file icon.
  */
 const TABLE: readonly (FormatFamily & { readonly exts: string })[] = [
-  { family: 'photoshop', icon: 'file-image', color: '#31a8ff', exts: 'psd psb' },
+  { family: 'photoshop', icon: 'file-image', color: '#31a8ff', mark: 'Ps', exts: 'psd psb' },
   {
     family: 'raw',
     icon: 'aperture',
     color: '#31a8ff',
     exts: '3fr ari arw braw cr2 cr3 crw dcr dng erf fff gpr iiq kdc mef mos mrw nef nrw orf pef r3d raf raw rw2 rwl sr2 srf srw x3f',
   },
-  { family: 'illustrator', icon: 'pen-tool', color: '#ff9a00', exts: 'ai ait eps' },
-  { family: 'indesign', icon: 'newspaper', color: '#ff3366', exts: 'indd indt idml' },
+  { family: 'illustrator', icon: 'pen-tool', color: '#ff9a00', mark: 'Ai', exts: 'ai ait eps' },
+  { family: 'indesign', icon: 'newspaper', color: '#ff3366', mark: 'Id', exts: 'indd indt idml' },
   { family: 'figma', icon: 'frame', color: '#f24e1e', exts: 'fig' },
   { family: 'sketch', icon: 'gem', color: '#f7b500', exts: 'sketch' },
-  { family: 'motion', icon: 'film', color: '#9999ff', exts: 'aep aepx aet mogrt ffx' },
-  { family: 'premiere', icon: 'clapperboard', color: '#e67bff', exts: 'prproj' },
+  { family: 'motion', icon: 'film', color: '#9999ff', mark: 'Ae', exts: 'aep aepx aet mogrt ffx' },
+  { family: 'premiere', icon: 'clapperboard', color: '#e67bff', mark: 'Pr', exts: 'prproj' },
   { family: 'edit', icon: 'scissors', color: '#6a839e', exts: 'drp drt fcpxml avb avp veg edl aaf' },
   { family: 'blender', icon: 'torus', color: '#e87d0d', exts: 'blend blend1' },
   { family: 'c4d', icon: 'cone', color: '#6a77ea', exts: 'c4d' },
@@ -89,9 +95,9 @@ const TABLE: readonly (FormatFamily & { readonly exts: string })[] = [
   { family: 'protools', icon: 'audio-waveform', color: '#7acb10', exts: 'ptx ptf' },
   { family: 'cubase', icon: 'piano', color: '#ea3a42', exts: 'cpr npr' },
   { family: 'pdf', icon: 'file-text', color: '#fa0f00', exts: 'pdf' },
-  { family: 'word', icon: 'file-pen-line', color: '#5381c7', exts: 'doc docx odt rtf' },
-  { family: 'excel', icon: 'file-spreadsheet', color: '#408e5f', exts: 'xls xlsx xlsm ods csv' },
-  { family: 'powerpoint', icon: 'lucide-presentation', color: '#dd5130', exts: 'ppt pptx odp' },
+  { family: 'word', icon: 'file-pen-line', color: '#5381c7', mark: 'W', exts: 'doc docx odt rtf' },
+  { family: 'excel', icon: 'file-spreadsheet', color: '#408e5f', mark: 'X', exts: 'xls xlsx xlsm ods csv' },
+  { family: 'powerpoint', icon: 'lucide-presentation', color: '#dd5130', mark: 'P', exts: 'ppt pptx odp' },
   { family: 'archive', icon: 'file-archive', color: 'yellow', exts: 'zip rar 7z tar gz tgz bz2 xz' },
   { family: 'font', icon: 'file-type', color: 'pink', exts: 'ttf otf ttc woff woff2' },
   { family: 'key', icon: 'file-key', color: null, exts: 'ovpn pem crt cer p12 pfx' },
@@ -122,8 +128,8 @@ const TABLE: readonly (FormatFamily & { readonly exts: string })[] = [
 const OTHER: FormatFamily = { family: 'other', icon: 'file', color: null };
 
 const BY_EXT = new Map<string, FormatFamily>(
-  TABLE.flatMap(({ family, icon, color, exts }) => {
-    const look: FormatFamily = { family, icon, color };
+  TABLE.flatMap(({ family, icon, color, mark, exts }) => {
+    const look: FormatFamily = mark === undefined ? { family, icon, color } : { family, icon, color, mark };
     return exts.split(' ').map((ext) => [ext, look] as const);
   }),
 );
@@ -152,4 +158,18 @@ export function formatLabel(ext: string): string {
   if (BY_EXT.has(ext.toLowerCase())) return label;
   const chars = [...label];
   return chars.length <= LABEL_MAX ? label : `${chars.slice(0, LABEL_MAX - 1).join('')}…`;
+}
+
+/** Light presets: dark letters read on them (Obsidian 1.14: yellow, green, cyan, pink). */
+const LIGHT_PRESETS = new Set(['yellow', 'green', 'cyan', 'pink']);
+
+/**
+ * Letters and icon on a filled document silhouette: white, or dark on a light fill (relative luminance above
+ * 0.5: Sketch yellow, light presets). A neutral family has no fill of its own and takes the theme text color.
+ */
+export function formatInk(color: ColorValue | null): 'light' | 'dark' | 'theme' {
+  if (color === null) return 'theme';
+  if ((PRESET_COLORS as readonly string[]).includes(color))
+    return LIGHT_PRESETS.has(color) ? 'dark' : 'light';
+  return luminance(color as `#${string}`) > 0.5 ? 'dark' : 'light';
 }

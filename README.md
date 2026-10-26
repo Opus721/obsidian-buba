@@ -14,9 +14,18 @@ Buba turns the folders of your vault into a visual asset library. Every file sho
 
 ![Switching the grid between the Grid, Justified and Columns layouts and changing the tile size](docs/readme/layouts.gif)
 
+## Folders with covers
+
+- **Folder tiles look like folders**: a slanted front with a few of the folder's files peeking out of it, which fan out when you point at the folder on a computer.
+- **Give a folder a cover** to turn it into a board of references: right-click the tile and upload a picture, or make any picture in the folder its cover. Move and zoom the cover to frame it. Covers are stored in Buba's own data, never among your files, and follow the folder when you rename or move it.
+- **Without a cover** a folder shows its own icon and color, as in the tree, or its newest picture.
+- **Choose the look** in Buba's settings: the cover on the front or behind a glass front, files inside or not, and how a selected folder is marked.
+
+![Folder tiles in the grid: covers on Boards, Generations and Moodboard, colored Client work and References, files peeking out of each folder, Moodboard selected](docs/readme/folders.png)
+
 ## Organize the tree
 
-- **Folder colours and icons** in the Buba tree, so the folders you use most stand out.
+- **Folder colours and icons** in the Buba tree, so the folders you use most stand out. A closed folder shows a closed folder icon, an open one an open icon, and on a computer folders open with a short slide.
 - **Drag a folder onto another folder** to move it inside; the folder under the pointer lights up. Drop it on "All files" to move it to the top level. The open folder stays open at its new place, and Ctrl+Z in the grid moves it back.
 - **Rename and delete folders** right in the tree, from the menu or with the Delete key. Delete asks first, and warns when files inside are references of generations.
 - **Drag a tag onto a tag group** to move it into the group, or onto "All tags" to take it out.

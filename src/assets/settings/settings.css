@@ -7,3 +7,10 @@
 body:not(.is-phone) .buba-settings .setting-item-control select.dropdown {
   width: auto;
 }
+
+/* Subheadings inside "Appearance" (tab.ts `subheading`): smaller and greyer than the group heading. */
+.buba-settings .setting-item.setting-item-heading.buba-setting-subheading .setting-item-name {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}

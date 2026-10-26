@@ -1,0 +1,245 @@
+/* File without a picture in the grid (PSD and AI without a thumbnail, AEP, ZIP…: `.mod-format` on the tile
+   picture, tiles.ts `stubOf`), "Program file tiles" setting, class on `body` from src/platform/tree-look.ts;
+   parts made by tiles.ts `#fillDoc`. Word of the owner 25.10: programs differ by silhouette, like in a file
+   manager. Three options:
+   - Silhouette (default): a filled document with a folded corner in the family color, the family letters
+     ("Ps", "Ae") or its icon in the middle, the type under them. It fits the tile by height in the uniform grid
+     (the rest of the tile is empty) and fills its own document-shaped tile in rows and columns (tiles.ts
+     `DOC_ASPECT`).
+   - Small silhouette: the same, smaller, in a square tile with empty space around; it stands at the bottom,
+     in the middle or at the top, and its size is a share of the tile (Style Settings, Tiles section).
+   - Square with an icon: the usual tile background, the type at the bottom left, the letters or icon on a
+     plaque in the family color at the bottom right, as on a folder tile.
+   The family color is `--buba-format-color` (a preset or a custom `#rrggbb`), darkened a little so white
+   letters read; a light color takes dark letters (`mod-ink-dark`, src/core/format/family.ts `formatInk`). A
+   family without a color is a neutral document in theme colors. Letters and type are sized from the document
+   (container units), so they keep their place at every tile size. A tile that has a preview is a picture and
+   none of this applies. */
+
+.buba-tile-doc {
+  display: none;
+}
+
+:is(body.buba-file-tile-shape, body.buba-file-tile-small, body.buba-file-tile-plate)
+  .buba-tile:not(.has-preview)
+  .buba-tile-thumb.mod-format {
+  --buba-doc-fill: color-mix(in oklch, var(--buba-format-color) 88%, black);
+  --buba-doc-ink: white;
+}
+
+:is(body.buba-file-tile-shape, body.buba-file-tile-small, body.buba-file-tile-plate)
+  .buba-tile:not(.has-preview)
+  .buba-tile-thumb.mod-format
+  :is(.buba-tile-icon, .buba-tile-plate) {
+  display: none;
+}
+
+/* Only while the picture has `mod-format`: an element that showed a file earlier keeps its silhouette, and
+   as a folder or a picture still loading it must not show it. */
+:is(body.buba-file-tile-shape, body.buba-file-tile-small, body.buba-file-tile-plate)
+  .buba-tile:not(.has-preview)
+  .buba-tile-thumb.mod-format
+  .buba-tile-doc {
+  display: block;
+  position: absolute;
+  container-type: size;
+  pointer-events: none;
+}
+
+.buba-tile-doc.mod-ink-dark {
+  --buba-doc-fill: var(--buba-format-color);
+  --buba-doc-ink: rgb(0 0 0 / 78%);
+}
+
+.buba-tile-doc.mod-ink-theme {
+  --buba-doc-fill: color-mix(in srgb, var(--text-normal) 22%, var(--background-secondary));
+  --buba-doc-ink: var(--text-normal);
+}
+
+/* Silhouette and small silhouette: the tile picture is only the frame, the document is the tile. */
+:is(body.buba-file-tile-shape, body.buba-file-tile-small)
+  .buba-tile:not(.has-preview)
+  .buba-tile-thumb.mod-format {
+  overflow: visible;
+  background: none;
+  box-shadow: none;
+}
+
+:is(body.buba-file-tile-shape, body.buba-file-tile-small) .buba-tile:not(.has-preview) .buba-tile-doc {
+  top: 0;
+  left: 50%;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 0.8;
+  translate: -50% 0;
+}
+
+body.buba-file-tile-small .buba-tile:not(.has-preview) .buba-tile-doc {
+  top: auto;
+  bottom: 0;
+  height: var(--buba-style-file-small-size, 62%);
+}
+
+.buba-doc-ring,
+.buba-doc-body,
+.buba-doc-fold {
+  position: absolute;
+}
+
+.buba-doc-body {
+  inset: 0;
+  background-color: var(--buba-doc-fill);
+  background-image: linear-gradient(rgb(255 255 255 / 14%), transparent 50%, rgb(0 0 0 / 10%));
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 100' preserveAspectRatio='none'%3E%3Cpath d='M7 0H54L80 26V93Q80 100 73 100H7Q0 100 0 93V7Q0 0 7 0Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100% no-repeat;
+}
+
+.buba-doc-ring {
+  display: none;
+  inset: 0;
+  --buba-ring: var(--interactive-accent);
+  filter: drop-shadow(2px 0 0 var(--buba-ring)) drop-shadow(-2px 0 0 var(--buba-ring))
+    drop-shadow(0 2px 0 var(--buba-ring)) drop-shadow(0 -2px 0 var(--buba-ring));
+}
+
+/* The selection ring is the document grown by 2 px with shadows, so it keeps its width on the folded corner;
+   the shape is masked on a child, as a filter works before the mask of its own element. */
+.buba-doc-ring > div {
+  position: absolute;
+  inset: 0;
+  background-color: var(--buba-ring);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 100' preserveAspectRatio='none'%3E%3Cpath d='M7 0H54L80 26V93Q80 100 73 100H7Q0 100 0 93V7Q0 0 7 0Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100% no-repeat;
+}
+
+.buba-tile.is-selected .buba-doc-ring {
+  display: block;
+}
+
+/* The folded corner: the cut-off corner of the body, lighter. */
+.buba-doc-fold {
+  top: 0;
+  right: 0;
+  width: 32.5%;
+  height: 26%;
+  background-color: rgb(255 255 255 / 38%);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26' preserveAspectRatio='none'%3E%3Cpath d='M0 0V20Q0 26 6 26H26Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100% no-repeat;
+}
+
+.mod-ink-theme .buba-doc-fold {
+  background-color: rgb(255 255 255 / 30%);
+}
+
+.buba-doc-letters,
+.buba-doc-icon {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  translate: -50% -50%;
+  color: var(--buba-doc-ink);
+}
+
+.buba-doc-letters {
+  font-family: var(--font-interface);
+  font-size: 30cqh;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.buba-tile-doc:not(.mod-letters) .buba-doc-letters,
+.buba-tile-doc.mod-letters .buba-doc-icon {
+  display: none;
+}
+
+.buba-doc-icon {
+  display: flex;
+  --icon-size: 38cqw;
+  --icon-stroke: 2px;
+}
+
+.buba-doc-icon svg {
+  width: 38cqw;
+  height: 38cqw;
+}
+
+.buba-doc-label {
+  position: absolute;
+  right: 0;
+  bottom: 6cqh;
+  left: 0;
+  overflow: hidden;
+  color: var(--buba-doc-ink);
+  font-family: var(--font-interface);
+  font-size: 11.5cqh;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-align: center;
+  text-overflow: clip;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+
+/* Square with an icon: the tile keeps its background and selection ring; type at the bottom left, the
+   letters or icon on a plaque in the family color at the bottom right, like the plaque of a folder tile. */
+body.buba-file-tile-plate .buba-tile:not(.has-preview) .buba-tile-doc {
+  inset: 0;
+  --buba-doc-plaque: 22px;
+}
+
+.is-phone.buba-file-tile-plate .buba-tile:not(.has-preview) .buba-tile-doc {
+  --buba-doc-plaque: 24px;
+}
+
+body.buba-file-tile-plate .buba-tile-doc :is(.buba-doc-ring, .buba-doc-body, .buba-doc-fold) {
+  display: none;
+}
+
+body.buba-file-tile-plate .buba-tile-doc .buba-doc-label {
+  right: auto;
+  bottom: var(--size-4-2);
+  left: calc(var(--size-4-2) + 2px);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.05em;
+  line-height: var(--buba-doc-plaque);
+  opacity: 1;
+}
+
+body.buba-file-tile-plate .buba-tile-doc :is(.buba-doc-letters, .buba-doc-icon) {
+  top: auto;
+  right: var(--size-4-2);
+  bottom: var(--size-4-2);
+  left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--buba-doc-plaque);
+  height: var(--buba-doc-plaque);
+  translate: none;
+  border-radius: 6px;
+  background-color: var(--buba-doc-fill);
+}
+
+body.buba-file-tile-plate .buba-tile-doc .buba-doc-letters {
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+body.buba-file-tile-plate .buba-tile-doc .buba-doc-icon {
+  --icon-size: 14px;
+}
+
+body.buba-file-tile-plate .buba-tile-doc .buba-doc-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+body.buba-file-tile-plate .buba-tile-doc:not(.mod-letters) .buba-doc-letters,
+body.buba-file-tile-plate .buba-tile-doc.mod-letters .buba-doc-icon {
+  display: none;
+}

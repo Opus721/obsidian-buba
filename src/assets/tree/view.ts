@@ -35,7 +35,7 @@ import {
 import { ROOT } from '../../core/actions/new-folder.ts';
 import { colorCss } from '../../core/color/value.ts';
 import { t } from '../../core/i18n/dict/tree.ts';
-import { folderIcon } from '../../core/icon/choices.ts';
+import { treeFolderIcon } from '../../core/icon/choices.ts';
 import { GRID_STATE_CHANGE } from '../../core/layout/grid-events.ts';
 import { movedPath, normalizeGridViewState } from '../../core/layout/view-state.ts';
 import type { FolderLook } from '../../core/storage/types.ts';
@@ -49,6 +49,7 @@ import { openGrid } from '../index.ts';
 import { passportStorage } from '../../platform/passports.ts';
 import { RowMenus, showRowMenu, type MenuAt, type RowMenuAt } from '../../platform/row-menus.ts';
 import { dragExpander } from '../../platform/drag-expand.ts';
+import { collapseMotion, expandMotion } from '../../platform/fold-motion.ts';
 import { endTreeRowDrag, startTreeRowDrag, treeRowDrag } from '../../platform/tree-drag.ts';
 import { isTypingTarget } from '../../core/tags/keys.ts';
 import { nameOf } from '../../platform/files/file-index.ts';
@@ -76,6 +77,7 @@ interface ItemRow {
   readonly item: TreeItem;
   readonly el: HTMLElement;
   readonly arrow: HTMLElement | null;
+  readonly icon: HTMLElement | null;
   readonly flair: HTMLElement | null;
   children: HTMLElement | null;
   cleanup: (() => void) | null;
@@ -99,7 +101,7 @@ interface FolderIcon {
 
 type Part = 'items' | 'counts' | 'folders' | 'looks';
 
-const NO_LOOK: FolderLook = { color: null, icon: null };
+const NO_LOOK: FolderLook = { color: null, icon: null, cover: null, frame: null };
 const LOW_CONTRAST = ['mod-low-contrast-light', 'mod-low-contrast-dark'];
 /** Folder row selector for the delegated row menu listener. */
 const FOLDER_ROW = '.tree-item-self[data-path]';
@@ -115,11 +117,24 @@ const SPACE = 'buba-tree-space';
 const ACTIVE = 'is-active';
 /** Row under a drop: the class Obsidian's file explorer puts on the folder under a drag, drawn by the theme. */
 const OVER = 'is-being-dragged-over';
+/** Rows on the path to the open folder: the Buba theme draws their lines in the folder's color. */
+const PATH = 'mod-active-path';
 /** Order button and menu items use the file explorer's wording minus "file": the tree has only folders. */
 const ORDER_TITLES = {
   alphabetical: 'orderAlphabetical',
   alphabeticalReverse: 'orderAlphabeticalReverse',
 } as const satisfies Readonly<Record<FolderOrder, string>>;
+
+/**
+ * A press that expands or collapses the row: on the arrow, or on the folder or item icon while the theme
+ * hides the arrow (the Buba theme: the closed or open icon tells the state). A hidden arrow has no boxes.
+ * Elsewhere, and on the icon of a folder without subfolders, the press opens the folder, as on the name.
+ */
+function onFold(at: Element): boolean {
+  if (at.closest('.collapse-icon')) return true;
+  const arrow = at.closest('.buba-tree-icon')?.parentElement?.querySelector(':scope > .collapse-icon');
+  return !!arrow && arrow.getClientRects().length === 0;
+}
 
 export class TreeView extends ItemView {
   readonly #plugin: Plugin;
@@ -151,6 +166,13 @@ export class TreeView extends ItemView {
    */
   #active: string | null = null;
   #activeEl: HTMLElement | null = null;
+  /** `.tree-item`s marked `PATH` by the last `#markPath`. */
+  #pathEls: HTMLElement[] = [];
+  /** A folder expanded by a click: its children grow on the next render (`expandMotion`). */
+  #grow: string | null = null;
+  /** Folders, and registry items by id, whose children are shrinking after a click; a click waits for the end. */
+  readonly #shrinking = new Set<string>();
+  readonly #shrinkingItems = new Set<string>();
   /** Folder to scroll to once its row is drawn: the index may learn about a new folder later. */
   #scrollTarget: string | null = null;
   /**
@@ -225,6 +247,7 @@ export class TreeView extends ItemView {
     this.#listenSpace();
     this.#listenSpaceDrop();
     this.#listenDelete();
+    this.#listenCutNames();
     this.register(this.#assets.onChange(() => this.#schedule('items')));
     this.register(this.#index.onChange(() => this.#schedule('folders')));
     // Folder looks have their own storage channel: tag edits do not wake the tree.
@@ -289,21 +312,21 @@ export class TreeView extends ItemView {
       const el = this.#itemsEl.createDiv({ cls: 'tree-item' });
       const self = el.createDiv({ cls: 'tree-item-self is-clickable' });
       const arrow = item.render ? this.#arrow(self) : null;
-      if (item.icon) this.#icon(self, item.icon);
+      const icon = item.icon ? this.#icon(self, item.icon) : null;
       self.createDiv({ cls: 'tree-item-inner', text: item.title });
       const flair = item.count ? this.#flair(self, item.count()) : null;
-      const row: ItemRow = { item, el, arrow, flair, children: null, cleanup: null, off: null };
+      const row: ItemRow = { item, el, arrow, icon, flair, children: null, cleanup: null, off: null };
       if (flair && item.onChange) row.off = item.onChange(() => this.#schedule('counts'));
       // The arrow, and the whole row of an item without a grid ("All tags"), toggles on every click, as in
       // Obsidian's file explorer; on the name the second click of a double click does not open the grid
       // again, the `dblclick` below expands.
       self.addEventListener('click', (evt) => {
         if (item.menu && !this.#menus.click()) return;
-        if (arrow?.contains(evt.target as Node) || !item.source) this.#toggleItem(row);
+        if ((arrow && onFold(evt.target as Element)) || !item.source) this.#toggleItem(row);
         else if (evt.detail <= 1) void this.#assets.openGrid(item.source);
       });
       self.addEventListener('dblclick', (evt) => {
-        if (item.source && arrow && !arrow.contains(evt.target as Node)) this.#toggleItem(row);
+        if (item.source && arrow && !onFold(evt.target as Element)) this.#toggleItem(row);
       });
       if (item.menu) this.#listenMenu(self, item);
       if (item.drop) this.#listenDrop(self, item.drop);
@@ -391,10 +414,25 @@ export class TreeView extends ItemView {
   }
 
   /**
+   * A folder or tag name cut with "…" ("Long names on one line", tree.css) shows whole in Obsidian's hover
+   * tooltip, as a tile name in the grid: Obsidian shows it for any element with `aria-label` under the mouse.
+   * The label is set on `pointerover`, which comes before `mouseover`, and only for a cut name: a whole one is
+   * not repeated. One listener for both trees, rows come and go with every render.
+   */
+  #listenCutNames(): void {
+    this.registerDomEvent(this.contentEl, 'pointerover', (evt) => {
+      const name = (evt.target as Element | null)?.closest?.<HTMLElement>('.tree-item-inner');
+      if (!name) return;
+      if (name.scrollWidth > name.clientWidth) name.setAttr('aria-label', name.textContent ?? '');
+      else name.removeAttribute('aria-label');
+    });
+  }
+
+  /**
    * Delete on the highlighted folder, with the confirmation of "Delete" in its menu. The key is the tree's
    * while the last press in the window was a left press on the name of the highlighted folder's row: a click
    * there opens the grid and moves focus to it, as before, yet the user's attention is on the tree, as in
-   * Eagle. A press on the arrow or on another row that did not open it, or a drag that moved it, leaves the
+   * Eagle. A press on the arrow (or on the icon in its place) or on another row that did not open it, or a drag that moved it, leaves the
    * key with the grid: the press is remembered by path and must match the highlight. A press anywhere else
    * gives the key back; it is ignored in a text field, during input composition, with a modifier, while a
    * dialog or a menu is open, and after a delete. Listened in the capture phase, before the grid's own Delete.
@@ -408,7 +446,7 @@ export class TreeView extends ItemView {
         const at = evt.target as Element | null;
         const row =
           evt.button === 0 && this.contentEl.contains(at) ? at?.closest?.<HTMLElement>(FOLDER_ROW) : null;
-        this.#keys = row && !at?.closest('.collapse-icon') ? (row.dataset.path ?? null) : null;
+        this.#keys = row && at && !onFold(at) ? (row.dataset.path ?? null) : null;
       },
       { capture: true },
     );
@@ -444,12 +482,25 @@ export class TreeView extends ItemView {
     this.#itemsEl?.empty();
   }
 
+  /** A click on an item's arrow or row: its content grows or shrinks, as a folder's children. */
   #toggleItem(row: ItemRow): void {
-    if (!row.item.render) return;
+    if (!row.item.render || this.#shrinkingItems.has(row.item.id)) return;
     const open = !this.#openItems.has(row.item.id);
-    if (open) this.#openItems.add(row.item.id);
-    else this.#openItems.delete(row.item.id);
-    this.#showItem(row, open);
+    if (open) {
+      this.#openItems.add(row.item.id);
+      this.#showItem(row, true);
+      if (row.children) expandMotion(row.children);
+      return;
+    }
+    this.#openItems.delete(row.item.id);
+    if (!row.children) return this.#showItem(row, false);
+    row.arrow?.addClass('is-collapsed');
+    this.#paintItem(row, false);
+    this.#shrinkingItems.add(row.item.id);
+    collapseMotion(row.children, () => {
+      this.#shrinkingItems.delete(row.item.id);
+      if (!this.#openItems.has(row.item.id)) this.#showItem(row, false);
+    });
   }
 
   /**
@@ -460,6 +511,7 @@ export class TreeView extends ItemView {
     if (!item.render) return;
     row.el.toggleClass('is-collapsed', !open);
     row.arrow?.toggleClass('is-collapsed', !open);
+    this.#paintItem(row, open);
     if (open && !row.children) {
       row.children = row.el.createDiv({ cls: 'tree-item-children' });
       const cleanup = item.render(row.children);
@@ -498,6 +550,11 @@ export class TreeView extends ItemView {
       });
     } else this.#buildFolders(this.#foldersEl, rows);
     this.#rows = rows;
+    if (this.#grow !== null) {
+      const children = this.#childrenOf(this.#grow);
+      this.#grow = null;
+      if (children) expandMotion(children);
+    }
     this.#markActive();
     this.#scrollToTarget();
     // One button for both actions, like "Collapse all" / "Expand all" in Obsidian's file explorer.
@@ -530,7 +587,7 @@ export class TreeView extends ItemView {
         icon: '',
         color: undefined,
       };
-      this.#paint(icon, row.path);
+      this.#paint(icon, row.path, row.expanded);
       this.#icons.push(icon);
       self.createDiv({ cls: 'tree-item-inner', text: row.name });
       this.#flairs.push(this.#flair(self, row.count));
@@ -544,18 +601,19 @@ export class TreeView extends ItemView {
   #updateLooks(): void {
     this.#rows.forEach((row, at) => {
       const icon = this.#icons[at];
-      if (icon) this.#paint(icon, row.path);
+      if (icon) this.#paint(icon, row.path, row.expanded);
     });
   }
 
   /**
    * Icon: `setIcon` only when the id changes; color: `--buba-color` after `colorCss` and the contrast
    * classes, as for the tag dot, on the icon and on the row (`mod-folder-color`). An uncolored row gets
-   * `--buba-color: initial`, otherwise it would inherit the parent folder's color.
+   * `--buba-color: initial`, otherwise it would inherit the parent folder's color. Without its own icon the
+   * folder is open while `open` (expanded) and closed otherwise: in the Buba theme the icon replaces the arrow.
    */
-  #paint(icon: FolderIcon, path: string): void {
+  #paint(icon: FolderIcon, path: string, open: boolean): void {
     const look = this.#storage()?.folderLook(path) ?? NO_LOOK;
-    const id = folderIcon(look.icon, (each) => this.#knows(each));
+    const id = treeFolderIcon(look.icon, (each) => this.#knows(each), open);
     if (id !== icon.icon) {
       setIcon(icon.el, id);
       icon.icon = id;
@@ -592,7 +650,7 @@ export class TreeView extends ItemView {
     const target = (evt: MouseEvent) => {
       const at = evt.target as Element;
       const self = at.closest<HTMLElement>(FOLDER_ROW);
-      return self ? { self, path: self.dataset.path ?? '', onArrow: !!at.closest('.collapse-icon') } : null;
+      return self ? { self, path: self.dataset.path ?? '', onArrow: onFold(at) } : null;
     };
     // The folder row menu is delegated: rows get rebuilt, the listeners are one set per container.
     this.#menus.attach(container, (at) => this.#folderMenu(at), FOLDER_ROW);
@@ -603,12 +661,12 @@ export class TreeView extends ItemView {
       // The arrow toggles on every click, as in Obsidian's file explorer: a click within the double-click
       // time is the second of a series (`detail` 2), and dropping it left the folder as it was. On the name
       // the second click does not open the grid again, the `dblclick` below expands.
-      if (hit.onArrow) this.#toggleFolder(hit.path);
+      if (hit.onArrow) this.#toggleFolder(hit.path, true);
       else if (evt.detail <= 1) void openGrid(this.#plugin, hit.path);
     });
     container.addEventListener('dblclick', (evt) => {
       const hit = target(evt);
-      if (hit && !hit.onArrow && hit.self.hasClass('mod-collapsible')) this.#toggleFolder(hit.path);
+      if (hit && !hit.onArrow && hit.self.hasClass('mod-collapsible')) this.#toggleFolder(hit.path, true);
     });
     // A folder row drag: the ghost shows the row's icon and name; drops are taken by folder rows
     // (src/assets/actions/tree-drop.ts) and by "All files" and the empty space (`#listenSpaceDrop`).
@@ -733,12 +791,44 @@ export class TreeView extends ItemView {
   }
 
   #markActive(): void {
+    this.#markPath();
     const at = this.#active === null ? -1 : this.#rows.findIndex((row) => row.path === this.#active);
     const el = at === -1 ? null : (this.#selves[at] ?? null);
     if (el === this.#activeEl) return;
     this.#activeEl?.removeClass(ACTIVE);
     el?.addClass(ACTIVE);
     this.#activeEl = el;
+  }
+
+  /**
+   * The path to the open folder, for the Buba theme lines: `PATH` on the `.tree-item` of the open folder and
+   * of each parent; when the folder sits in a collapsed parent, the path ends at the nearest drawn parent. Each
+   * piece of the path takes the color of the folder it hangs from: the `--buba-color` of that row (`#paint`).
+   */
+  #markPath(): void {
+    for (const el of this.#pathEls) el.removeClass(PATH);
+    this.#pathEls = [];
+    const container = this.#foldersEl;
+    if (!container) return;
+    let path = this.#active;
+    let at = -1;
+    while (path !== null && (at = this.#rows.findIndex((row) => row.path === path)) === -1) {
+      const slash = path.lastIndexOf('/');
+      path = slash === -1 ? null : path.slice(0, slash);
+    }
+    for (let el = this.#selves[at]?.parentElement ?? null; el && el !== container; el = el.parentElement)
+      if (el.hasClass('tree-item')) {
+        el.addClass(PATH);
+        this.#pathEls.push(el);
+      }
+  }
+
+  /** The children block of a drawn, expanded folder row. */
+  #childrenOf(path: string): HTMLElement | null {
+    const at = this.#rows.findIndex((row) => row.path === path);
+    return (
+      this.#selves[at]?.parentElement?.querySelector<HTMLElement>(':scope > .tree-item-children') ?? null
+    );
   }
 
   /**
@@ -809,9 +899,33 @@ export class TreeView extends ItemView {
     this.#saveFolders();
   }
 
-  #toggleFolder(path: string): void {
-    if (!this.#expanded.delete(path)) this.#expanded.add(path);
-    this.#saveFolders();
+  /**
+   * Expand or collapse; `motion` (a click, not a drag or a command): the children grow after the render or
+   * shrink first, while the icon and the arrow already show the new state (src/platform/fold-motion.ts).
+   */
+  #toggleFolder(path: string, motion = false): void {
+    if (this.#shrinking.has(path)) return;
+    if (!this.#expanded.has(path)) {
+      this.#expanded.add(path);
+      if (motion) this.#grow = path;
+      this.#saveFolders();
+      return;
+    }
+    const children = motion ? this.#childrenOf(path) : null;
+    if (!children) {
+      this.#expanded.delete(path);
+      this.#saveFolders();
+      return;
+    }
+    const at = this.#rows.findIndex((row) => row.path === path);
+    const icon = this.#icons[at];
+    if (icon) this.#paint(icon, path, false);
+    this.#selves[at]?.querySelector(':scope > .collapse-icon')?.addClass('is-collapsed');
+    this.#shrinking.add(path);
+    collapseMotion(children, () => {
+      this.#shrinking.delete(path);
+      if (this.#expanded.delete(path)) this.#saveFolders();
+    });
   }
 
   #toggleAll(): void {
@@ -861,8 +975,17 @@ export class TreeView extends ItemView {
     return arrow;
   }
 
-  #icon(self: HTMLElement, icon: string): void {
-    setIcon(self.createDiv({ cls: 'buba-tree-icon' }), icon);
+  #icon(self: HTMLElement, icon: string): HTMLElement {
+    const el = self.createDiv({ cls: 'buba-tree-icon' });
+    setIcon(el, icon);
+    return el;
+  }
+
+  /** An item with an `openIcon` shows it while expanded, as a folder shows the open folder. */
+  #paintItem(row: ItemRow, open: boolean): void {
+    const { item, icon } = row;
+    if (!icon || !item.icon || !item.openIcon) return;
+    setIcon(icon, open ? item.openIcon : item.icon);
   }
 
   #flair(self: HTMLElement, count: number): HTMLElement {

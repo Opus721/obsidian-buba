@@ -55,7 +55,10 @@ import {
 } from './passport.ts';
 import { RecordIndex } from './record-index.ts';
 import {
+  COVERS_DIR,
   SCHEMA_VERSION,
+  isCoverFrame,
+  isCoverName,
   isDeviceId,
   isFolderPath,
   journalPath,
@@ -193,6 +196,20 @@ function iconOf(icon: string | null): string | null {
   return icon;
 }
 
+/** Cover frame: `isCoverFrame`, or `null` for the middle; anything else is refused before writing. */
+function frameOf(frame: string | null): string | null {
+  if (frame !== null && !isCoverFrame(frame))
+    throw new RangeError(`Cover frame must be "x y zoom", not ${JSON.stringify(frame)}`);
+  return frame;
+}
+
+/** Folder cover: `isCoverName`, or `null` for none; anything else is refused before writing. */
+function coverOf(cover: string | null): string | null {
+  if (cover !== null && !isCoverName(cover))
+    throw new RangeError(`Cover must be a file name in ${COVERS_DIR}, not ${JSON.stringify(cover)}`);
+  return cover;
+}
+
 /**
  * Paths of folders whose look in index `after` differs from `before`, after reading journals: a look from
  * another device shows even without tagged files.
@@ -202,7 +219,8 @@ function looksChanged(before: RecordIndex, after: RecordIndex): string[] {
   for (const path of new Set([...before.folderPaths(), ...after.folderPaths()])) {
     const a = before.folderLook(path);
     const b = after.folderLook(path);
-    if (a.color !== b.color || a.icon !== b.icon) out.push(path);
+    if (a.color !== b.color || a.icon !== b.icon || a.cover !== b.cover || a.frame !== b.frame)
+      out.push(path);
   }
   return out;
 }
@@ -386,20 +404,27 @@ export function createStore({ io, device, now, statOf }: StoreOptions): Store {
   }
 
   /**
-   * The look of folder `from` moves to `to` whole, both fields, so an old look of a long-deleted folder does
+   * The look of folder `from` moves to `to` whole, all fields, so an old look of a long-deleted folder does
    * not stick to the new path; `from` gets a removal. Exactly the same path, like Obsidian bookmarks:
    * Obsidian sends its own `rename` for nested folders. No look on `from` means no lines: nested files and a
-   * repeat of the same rename write nothing.
+   * repeat of the same rename write nothing. The cover and frame lines go only with a cover or frame: a build
+   * before covers reads the move without them.
    */
   function lookMoves(from: string, to: string): MetaAction[] {
-    const { color, icon } = index.folderLook(from);
-    if ((color === null && icon === null) || !isFolderPath(to)) return [];
+    const { color, icon, cover, frame } = index.folderLook(from);
+    if ((color === null && icon === null && cover === null && frame === null) || !isFolderPath(to)) return [];
     const out: MetaAction[] = [
       { op: 'meta.set', kind: 'folder', key: to, field: 'color', value: color },
       { op: 'meta.set', kind: 'folder', key: to, field: 'icon', value: icon },
     ];
+    if (cover !== null || index.folderLook(to).cover !== null)
+      out.push({ op: 'meta.set', kind: 'folder', key: to, field: 'cover', value: cover });
+    if (frame !== null || index.folderLook(to).frame !== null)
+      out.push({ op: 'meta.set', kind: 'folder', key: to, field: 'frame', value: frame });
     if (color !== null) out.push({ op: 'meta.set', kind: 'folder', key: from, field: 'color', value: null });
     if (icon !== null) out.push({ op: 'meta.set', kind: 'folder', key: from, field: 'icon', value: null });
+    if (cover !== null) out.push({ op: 'meta.set', kind: 'folder', key: from, field: 'cover', value: null });
+    if (frame !== null) out.push({ op: 'meta.set', kind: 'folder', key: from, field: 'frame', value: null });
     return out;
   }
 
@@ -965,6 +990,28 @@ export function createStore({ io, device, now, statOf }: StoreOptions): Store {
         () => [],
       );
     },
+
+    async setFolderCover(path, cover) {
+      const key = folderOf(path);
+      const value = coverOf(cover);
+      return setting(
+        { op: 'meta.set', kind: 'folder', key, field: 'cover', value },
+        () => index.folderLook(key).cover === value,
+        () => [],
+      );
+    },
+
+    async setFolderFrame(path, frame) {
+      const key = folderOf(path);
+      const value = frameOf(frame);
+      return setting(
+        { op: 'meta.set', kind: 'folder', key, field: 'frame', value },
+        () => index.folderLook(key).frame === value,
+        () => [],
+      );
+    },
+
+    coverInUse: (name) => index.folderPaths().some((path) => index.folderLook(path).cover === name),
 
     onFolderLook(listener) {
       lookListeners.add(listener);
