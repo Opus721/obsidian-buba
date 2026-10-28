@@ -95,13 +95,26 @@ export function previewBuilds(ext: string, ios: boolean): boolean {
 export const VIDEO_FRAME_VERSION = 1;
 
 /**
+ * Version of the PSD and PSB rule on a computer: the merged image (src/core/format/psd-composite.ts) instead
+ * of Photoshop's 160 px thumbnail, which stays the fallback and the rule on phones.
+ */
+export const PSD_COMPOSITE_VERSION = 1;
+
+/** Whether a computer builds the file's preview from the merged image: PSD and PSB, any case. */
+export function composited(ext: string): boolean {
+  const lower = ext.toLowerCase();
+  return lower === 'psd' || lower === 'psb';
+}
+
+/**
  * Version of the rule a file's preview is built with now: a database record with a lower version was built by
- * an older rule and is rebuilt once, and the new record carries the current version. Raised only for video
- * frames in the phone app (`mobileApp`: iPhone and Android, `Platform.isMobileApp`); everything else is 0,
- * like records without a version, so images and everything on desktop are not rebuilt.
+ * an older rule and is rebuilt once, and the new record carries the current version. Raised for video frames
+ * in the phone app (`mobileApp`: iPhone and Android, `Platform.isMobileApp`) and for PSD and PSB on a
+ * computer; everything else is 0, like records without a version, so images are not rebuilt.
  */
 export function previewVersion(ext: string, mobileApp: boolean): number {
-  return mobileApp && previewKind(ext) === 'video' ? VIDEO_FRAME_VERSION : 0;
+  if (mobileApp) return previewKind(ext) === 'video' ? VIDEO_FRAME_VERSION : 0;
+  return composited(ext) ? PSD_COMPOSITE_VERSION : 0;
 }
 
 /** How a video frame preview is built: what to load and when the frame at a point is taken. */

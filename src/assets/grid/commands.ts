@@ -13,6 +13,7 @@ import { hotkeysOf } from '../../core/settings/hotkeys.ts';
 import type { BubaAssets } from '../api.ts';
 import { crumbs } from './navigation.ts';
 import { standardTileSize } from './place-views.ts';
+import { selectAllTiles } from './selection.ts';
 import { connectStandardSize, SIZE_RESET_ICON, toolbarOf, type ToolbarNow } from './toolbar.ts';
 import { openTypeWindow } from './type-filter.ts';
 import { GridView } from './view.ts';
@@ -177,6 +178,12 @@ export function gridCommands(plugin: Plugin, assets: BubaAssets): GridCommand[] 
       name: t('lookMakeDefault'),
       can: ({ bar }) => bar?.ctx.look?.own === true,
       run: ({ bar }) => bar?.ctx.look?.makeCommon(),
+    },
+    {
+      id: 'select-all',
+      name: t('commandSelectAll'),
+      can: (grid) => grid.view.pathsInOrder().length > 0,
+      run: (grid) => selectAllTiles(grid.view),
     },
     {
       id: 'open-parent-folder',

@@ -3,9 +3,9 @@
 // "All files" or the empty space below the folders goes to the vault root.
 import type { Plugin } from 'obsidian';
 import { ROOT } from '../../core/actions/new-folder.ts';
-import { folderDrop } from '../../core/actions/tree-drop.ts';
+import { foldersDrop } from '../../core/actions/tree-drop.ts';
 import { endTreeRowDrag, treeRowDrag } from '../../platform/tree-drag.ts';
-import { moveFolder } from '../actions/tree-drop.ts';
+import { moveFolders } from '../actions/tree-drop.ts';
 import { t } from '../../core/i18n/dict/tree.ts';
 import { vaultFileIndex } from '../../platform/files/vault-index.ts';
 import type { BubaAssets } from '../api.ts';
@@ -26,12 +26,12 @@ export function registerTree(plugin: Plugin, assets: BubaAssets): void {
       space: true,
       accepts: (dt) => {
         const drag = treeRowDrag(dt);
-        return drag?.kind === 'folder' && folderDrop(drag.path, ROOT) !== null;
+        return drag?.kind === 'folder' && foldersDrop(drag.paths, ROOT) !== null;
       },
       drop: (dt) => {
         const drag = treeRowDrag(dt);
         endTreeRowDrag();
-        if (drag?.kind === 'folder') void moveFolder(plugin.app, drag.path, ROOT);
+        if (drag?.kind === 'folder') void moveFolders(plugin.app, drag.paths, ROOT);
       },
     },
   });

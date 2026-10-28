@@ -1,7 +1,7 @@
 {
   "id": "buba",
   "name": "Buba",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minAppVersion": "1.13.1",
   "description": "Manage assets in plain folders: a grid of previews, tags, rating and comments for any file, a quick viewer and drag to canvas.",
   "author": "Opus721",

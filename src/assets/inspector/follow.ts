@@ -4,7 +4,8 @@
 // 1.13): the active leaf if its view is navigable (`View.navigation`), otherwise the most recent leaf of the
 // main area (`getMostRecentLeaf`). The grid contract: open views from `assets.gridViews()`, the
 // `buba:selection-change` and `buba:grid-state-change` events, presses on the grid body; what a grid shows is
-// the content key of its `getState()` (`gridContentKey`).
+// the content key of its `getState()` (`gridContentKey`). An open canvas counts as a grid of its picked file
+// cards (src/platform/canvas-selection.ts); with no card picked it gives the canvas file itself.
 import { ItemView, Platform, TFile, type Events, type Plugin, type View } from 'obsidian';
 import {
   nextShown,
@@ -18,6 +19,7 @@ import {
 import { GRID_STATE_CHANGE, SELECTION_CHANGE } from '../../core/layout/grid-events.ts';
 import { gridContentKey, normalizeGridViewState } from '../../core/layout/view-state.ts';
 import { inDataDir, tagKey } from '../../core/storage/types.ts';
+import { PICKED_CARDS, canvasPicked, fileCards } from '../../platform/canvas-selection.ts';
 import type { BubaAssets, BubaGridView } from '../api.ts';
 import { onGridEvent } from '../grid/selection.ts';
 import { INSPECTOR_VIEW_TYPE, InspectorView } from './view.ts';
@@ -31,6 +33,9 @@ export interface PanelFollow {
   currentTag(): string | null;
   onSourceChange(listener: () => void): () => void;
 }
+
+/** View type of Obsidian's built-in canvas. */
+const CANVAS = 'canvas';
 
 export function registerFollow(plugin: Plugin, assets: BubaAssets): PanelFollow {
   const { vault, workspace } = plugin.app;
@@ -87,8 +92,25 @@ export function registerFollow(plugin: Plugin, assets: BubaAssets): PanelFollow 
       };
     }
     const file: unknown = (view as View & { file?: unknown }).file;
+    if (file instanceof TFile && view.getViewType() === CANVAS) return canvas(view, file);
     if (file instanceof TFile && !inDataDir(file.path)) return { kind: 'file', view, path: file.path };
     return { kind: 'other', view };
+  };
+
+  // The canvas text as the open canvas holds it now (`TextFileView.getViewData`), moved cards included.
+  const canvas = (view: View, file: TFile): MainView<View> => {
+    const text = (view as View & { getViewData?: () => string }).getViewData?.() ?? '';
+    const cards = filesOf(canvasPicked(view.containerEl, text));
+    const selected = cards.length ? cards : [file.path];
+    let onCanvas: Set<string> | null = null;
+    return {
+      kind: 'grid',
+      view,
+      state: `${CANVAS}:${file.path}`,
+      selected,
+      shows: (path) =>
+        path === file.path || (onCanvas ??= new Set(fileCards(text).map((card) => card.file))).has(path),
+    };
   };
 
   const loaded = (): InspectorView[] =>
@@ -189,6 +211,33 @@ export function registerFollow(plugin: Plugin, assets: BubaAssets): PanelFollow 
     if (path === null && evt.button === 0 && !evt.ctrlKey && !evt.metaKey)
       decide({ kind: 'clear', from: view });
   });
+
+  // Obsidian sends no event when cards are picked on a canvas: a pick ends with a press or a key there, so a
+  // frame after each, when the canvas has marked its cards, the picked boxes are compared with the last ones.
+  const canvasPicks = new WeakMap<View, string>();
+  const boxesKey = (view: View): string =>
+    [...view.containerEl.querySelectorAll<HTMLElement>(PICKED_CARDS)]
+      .map(({ style }) => `${style.transform} ${style.width} ${style.height}`)
+      .join('\n');
+  const watchCanvas = (view: View): void => {
+    if (view.getViewType() !== CANVAS || canvasPicks.has(view)) return;
+    canvasPicks.set(view, boxesKey(view));
+    const check = (): void => {
+      view.containerEl.win.requestAnimationFrame(() => {
+        const key = boxesKey(view);
+        if (canvasPicks.get(view) === key) return;
+        canvasPicks.set(view, key);
+        decide({ kind: 'select', from: view });
+      });
+    };
+    view.registerDomEvent(view.containerEl, 'pointerup', check, { capture: true });
+    view.registerDomEvent(view.containerEl, 'keyup', check, { capture: true });
+  };
+  const watchCanvases = (): void => {
+    for (const leaf of workspace.getLeavesOfType(CANVAS)) watchCanvas(leaf.view);
+  };
+  workspace.onLayoutReady(watchCanvases);
+  plugin.registerEvent(workspace.on('layout-change', watchCanvases));
 
   return {
     paths: () => shown.paths,

@@ -1,7 +1,7 @@
 // Connection point of modules to the grid and the tree: registries of grid sources, tree items and sort keys,
 // plus access to open grid views. src/assets/index.ts creates the object and passes it to each module's
 // `register…(plugin, assets)`. No `obsidian` at runtime: the registries are tested with a fake host.
-import type { Menu, Scope } from 'obsidian';
+import type { Menu, PaneType, Scope } from 'obsidian';
 import type { CoverFrame } from '../core/storage/types.ts';
 import type { FileRecord } from '../platform/files/file-index.ts';
 
@@ -33,6 +33,8 @@ export interface GridSourceProvider {
   title(source: GridSource): string;
   /** File paths in any order: the grid sorts them and takes the records from the index. */
   paths(source: GridSource): readonly string[];
+  /** Optional folder paths, shown as folder tiles before the files, as subfolders in a folder. */
+  folders?(source: GridSource): readonly string[];
   /** "Content changed" signal; returns the unsubscribe. */
   onChange(listener: () => void): () => void;
   /**
@@ -73,7 +75,37 @@ export interface TreeItem {
   menu?(menu: Menu): void;
   /** Takes drops on the item's row. */
   drop?: TreeItemDrop;
+  /**
+   * Place among the items, top first: "Bookmarks" 10, the databases section 20; without it 50, where "All
+   * files", "Untagged" and "All tags" stand. Equal places keep the registration order; folders are below all.
+   */
+  order?: number;
+  /** Buttons on the item's row before its count, such as a section's "+". */
+  actions?: readonly TreeItemAction[];
 }
+
+/** A button on a tree item's row: an icon with a tooltip; a press runs it and neither opens nor expands the row. */
+export interface TreeItemAction {
+  icon: string;
+  title: string;
+  run(evt: MouseEvent): void;
+}
+
+/**
+ * A button of the tree's header, between "New folder" and "Sort order", for an action on the whole tree such as
+ * "New tag" (word of the owner 27.10 22:22: like Obsidian's file explorer header, on a phone and a computer).
+ */
+export interface TreeHeaderButton {
+  id: string;
+  icon: string;
+  title: string;
+  /** Place among the buttons, left first; without it `TREE_ITEM_ORDER`. Equal places keep registration order. */
+  order?: number;
+  run(evt: MouseEvent): void;
+}
+
+/** Place of an item or a header button without `order`. */
+export const TREE_ITEM_ORDER = 50;
 
 /** What a tree item does with a drag released on its row. */
 export interface TreeItemDrop {
@@ -133,32 +165,49 @@ export type GridStatePatch = { folder: string | null; deep: boolean } | { source
 /** What the connection object takes from Obsidian: the open grid views and changing their state. */
 export interface AssetsHost {
   gridViews(): BubaGridView[];
-  openGrid(patch: GridStatePatch): Promise<void>;
+  /** `newTab`: in a new tab (or the pane `Keymap.isModEvent` gives), as Ctrl+click or the middle button in
+   *  Obsidian; otherwise in the open grid. */
+  openGrid(patch: GridStatePatch, newTab?: boolean | PaneType): Promise<void>;
 }
 
 export interface BubaAssets {
   /** Registrations return a removal function; a repeated kind or id throws an error naming it. */
   registerGridSource(kind: string, provider: GridSourceProvider): () => void;
   registerTreeItem(item: TreeItem): () => void;
+  registerTreeButton(button: TreeHeaderButton): () => void;
   registerSortKey(id: string, title: string, compare: (a: FileRecord, b: FileRecord) => number): () => void;
   gridSource(kind: string): GridSourceProvider | undefined;
-  /** In registration order. */
+  /** By `order`, equal places in registration order. */
   treeItems(): TreeItem[];
+  /** By `order`, equal places in registration order. */
+  treeButtons(): TreeHeaderButton[];
   /** In registration order. */
   sortKeys(): SortKeyDef[];
   /** Any registry changed; returns the unsubscribe. */
   onChange(listener: () => void): () => void;
+  /** Expands tree item `id` in the open trees, as a press on its collapsed row; an expanded one stays. */
+  expandTreeItem(id: string): void;
+  /** Requests of `expandTreeItem`, for the trees; returns the unsubscribe. */
+  onExpandTreeItem(listener: (id: string) => void): () => void;
   gridViews(): BubaGridView[];
   /** Redraws the open grids, e.g. when what a sort key compares has changed. */
   refreshGrids(): void;
-  openGrid(source: GridSource): Promise<void>;
+  /** `newTab`: in a new tab (or the pane `Keymap.isModEvent` gives), as Ctrl+click or the middle button in
+   *  Obsidian; otherwise in the open grid. */
+  openGrid(source: GridSource, newTab?: boolean | PaneType): Promise<void>;
 }
+
+/** A registry's values by `order`, top or left first; `sort` is stable, so equal places keep registration order. */
+const byOrder = <T extends { order?: number }>(registry: Map<string, T>): T[] =>
+  [...registry.values()].sort((a, b) => (a.order ?? TREE_ITEM_ORDER) - (b.order ?? TREE_ITEM_ORDER));
 
 export function createAssets(host: AssetsHost): BubaAssets {
   const sources = new Map<string, GridSourceProvider>();
   const items = new Map<string, TreeItem>();
+  const buttons = new Map<string, TreeHeaderButton>();
   const sortKeys = new Map<string, SortKeyDef>();
   const listeners = new Set<() => void>();
+  const expanders = new Set<(id: string) => void>();
 
   const changed = (): void => {
     for (const listener of [...listeners]) listener();
@@ -178,9 +227,11 @@ export function createAssets(host: AssetsHost): BubaAssets {
   return {
     registerGridSource: (kind, provider) => add(sources, kind, provider, 'grid source'),
     registerTreeItem: (item) => add(items, item.id, item, 'tree item'),
+    registerTreeButton: (button) => add(buttons, button.id, button, 'tree button'),
     registerSortKey: (id, title, compare) => add(sortKeys, id, { id, title, compare }, 'sort key'),
     gridSource: (kind) => sources.get(kind),
-    treeItems: () => [...items.values()],
+    treeItems: () => byOrder(items),
+    treeButtons: () => byOrder(buttons),
     sortKeys: () => [...sortKeys.values()],
     onChange(listener) {
       listeners.add(listener);
@@ -188,17 +239,26 @@ export function createAssets(host: AssetsHost): BubaAssets {
         listeners.delete(listener);
       };
     },
+    expandTreeItem(id) {
+      for (const listener of [...expanders]) listener(id);
+    },
+    onExpandTreeItem(listener) {
+      expanders.add(listener);
+      return () => {
+        expanders.delete(listener);
+      };
+    },
     gridViews: () => host.gridViews(),
     refreshGrids() {
       for (const view of host.gridViews()) view.refresh();
     },
-    openGrid(source) {
-      if (source.kind === 'all') return host.openGrid({ folder: null, deep: false });
+    openGrid(source, newTab) {
+      if (source.kind === 'all') return host.openGrid({ folder: null, deep: false }, newTab);
       if (source.kind === 'folder') {
         const { path, withSubfolders } = source as FolderSource;
-        return host.openGrid({ folder: path, deep: withSubfolders });
+        return host.openGrid({ folder: path, deep: withSubfolders }, newTab);
       }
-      return host.openGrid({ source });
+      return host.openGrid({ source }, newTab);
     },
   };
 }

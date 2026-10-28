@@ -18,9 +18,14 @@
 // iPhone Photos (src/core/viewer/tap.ts); another file shows them again.
 import { ButtonComponent, Modal, Platform, setIcon, type App, type TFile } from 'obsidian';
 import { formatFamily } from '../../core/format/family.ts';
-import { AUDIO_EXTS, IMAGE_EXTS, OWN_VIEW_EXTS, VIDEO_EXTS } from '../../core/format/obsidian-types.ts';
+import { IMAGE_EXTS, VIDEO_EXTS } from '../../core/format/obsidian-types.ts';
 import { ANDROID_BACK_PX, EdgeSwipe, FILE_PANEL, atRightEdge, drawerWidth } from '../../core/viewer/edge.ts';
-import { mayRunAsProgram } from '../../core/viewer/executable.ts';
+import {
+  opensInDefaultApp as opensInDefaultAppExt,
+  opensInObsidian as opensInObsidianExt,
+  opensInTab as opensInTabExt,
+  isPicture as isPictureExt,
+} from '../../core/viewer/default-app.ts';
 import { t } from '../../core/i18n/dict/viewer.ts';
 import {
   fitView,
@@ -58,16 +63,19 @@ import './viewer.css';
 
 const IMAGE = IMAGE_EXTS;
 const VIDEO = VIDEO_EXTS;
-/**
- * What Obsidian opens in its own views and the viewer does not show: notes, canvases, bases, PDFs and audio,
- * by Obsidian's lists (src/core/format/obsidian-types.ts); `webm` is video, as in the viewer. Obsidian opens
- * images and video too, but the viewer shows those.
- */
-const IN_OBSIDIAN: ReadonlySet<string> = new Set([...OWN_VIEW_EXTS, ...AUDIO_EXTS]);
-
 /** Whether Obsidian, not the viewer, opens the file. */
 export function opensInObsidian(file: TFile): boolean {
-  return IN_OBSIDIAN.has(file.extension.toLowerCase());
+  return opensInObsidianExt(file.extension);
+}
+
+/** Whether "Open in new tab" and the middle button open the file in Obsidian: its views and video. */
+export function opensInTab(file: TFile): boolean {
+  return opensInTabExt(file.extension);
+}
+
+/** Whether the file is a picture: the middle button opens it in the viewer. */
+export function isPicture(file: TFile): boolean {
+  return isPictureExt(file.extension);
 }
 
 /**
@@ -75,9 +83,8 @@ export function opensInObsidian(file: TFile): boolean {
  * default app. Images and video have an Obsidian view, so `openFile` would open them in place of the grid
  * instead.
  */
-function opensInDefaultApp(file: TFile, name: string): boolean {
-  const ext = file.extension.toLowerCase();
-  return !IN_OBSIDIAN.has(ext) && !IMAGE.has(ext) && !VIDEO.has(ext) && !mayRunAsProgram(name);
+export function opensInDefaultApp(file: TFile, name: string): boolean {
+  return opensInDefaultAppExt(file.extension, name);
 }
 
 /**

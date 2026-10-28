@@ -64,6 +64,11 @@
   overflow-y: auto;
 }
 
+/* Phone: the counts stand clear of the scrollbar, which a phone draws over the list's edge. */
+.is-phone .buba-types-modal .buba-types {
+  padding-inline-end: var(--size-4-2);
+}
+
 .buba-types-row,
 .buba-types-keep {
   --buba-tw-line: round(calc(var(--line-height-tight) * 1em), 1px);
@@ -81,7 +86,10 @@
   --buba-tw-line: round(calc(var(--line-height-normal) * 1em), 1px);
 }
 
+/* Rows keep their height in a long list: the list scrolls rather than squeezing them, which put the text
+   off its row and the line against the types (word of the owner 28.10 08:40). */
 .buba-types-row {
+  flex-shrink: 0;
   padding: var(--buba-tw-pad-y) var(--buba-tw-pad-x);
 }
 

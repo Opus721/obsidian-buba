@@ -4,6 +4,7 @@
 // added" step. Buba tiles dropped on the grid are not an import (`hasBubaDragData`). The grid draws new tiles
 // itself: the file index follows vault events. Added files become the grid's selection and the first is
 // scrolled into view (`buba:added-select`, the selection module), so a new file does not get lost in the sort.
+// The added files are one undo step: Ctrl+Z puts them into the trash.
 import { Notice, type App, type Plugin } from 'obsidian';
 import { t } from '../../core/i18n/dict/actions.ts';
 import { ADDED_SELECT } from '../../core/layout/grid-events.ts';
@@ -17,6 +18,7 @@ import {
   type EventFiles,
   type ImportFolder,
 } from '../../platform/files/import.ts';
+import { recordCreated } from '../../platform/files/undo.ts';
 import type { AddedTag, BubaAssets } from '../api.ts';
 import { onGridEvent, type GridLeafView } from '../grid/selection.ts';
 
@@ -152,6 +154,8 @@ export async function importInto(
     });
     new Notice(message, refused.length ? REFUSED_MS : undefined);
     created = result.created;
+    // After the source step, so the added files are the last step even when the step tagged them.
+    if (first !== undefined) recordCreated(app, 'import', folderOf(first) ?? app.vault.getName(), created);
   } catch (error) {
     going?.hide();
     new Notice(t('notAdded', { error: error instanceof Error ? error.message : String(error) }));

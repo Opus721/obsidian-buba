@@ -3,6 +3,8 @@ import { translator, type Dictionary } from '../index.ts';
 
 const en = {
   allFiles: 'All files',
+  bookmarks: 'Bookmarks',
+  noBookmarks: 'No bookmarks',
 
   commandNewFolder: 'Create new folder…',
   commandNewSubfolder: 'Create subfolder in open folder…',
@@ -14,10 +16,18 @@ const en = {
   commandExpandAll: 'Expand all folders',
   commandOrderAlphabetical: 'Sort folders by name (A to Z)',
   commandOrderAlphabeticalReverse: 'Sort folders by name (Z to A)',
+  commandOrderModified: 'Sort folders by modified time (new to old)',
+  commandOrderModifiedReverse: 'Sort folders by modified time (old to new)',
+  commandOrderCreated: 'Sort folders by created time (new to old)',
+  commandOrderCreatedReverse: 'Sort folders by created time (old to new)',
 
   sortOrder: 'Change sort order',
   orderAlphabetical: 'Name (A to Z)',
   orderAlphabeticalReverse: 'Name (Z to A)',
+  orderModified: 'Modified time (new to old)',
+  orderModifiedReverse: 'Modified time (old to new)',
+  orderCreated: 'Created time (new to old)',
+  orderCreatedReverse: 'Created time (old to new)',
   collapseAll: 'Collapse all',
   expandAll: 'Expand all',
 
@@ -25,6 +35,8 @@ const en = {
   newFolderIn: 'New folder in “{name}”',
   newFolderItem: 'New folder…',
   newSubfolderItem: 'New subfolder…',
+  newSubfolder: 'New subfolder',
+  newFolderBeside: 'New folder alongside',
   newFolderBesideItem: 'New folder alongside…',
   create: 'Create',
   name: 'Name',
@@ -44,6 +56,13 @@ const en = {
   folderColorFailed: "Couldn't set the folder color",
   folderIconFailed: "Couldn't set the folder icon",
 
+  foldersCount: { one: '{count} folder', other: '{count} folders' },
+  foldersColorItem: 'Color of folders…',
+  foldersIconItem: 'Icon of folders…',
+  foldersColorTitle: { one: 'Color of {count} folder', other: 'Color of {count} folders' },
+  deleteFoldersItem: { one: 'Delete {count} folder', other: 'Delete {count} folders' },
+  foldersDeleteFailed: "Couldn't delete some folders — see the console for details",
+
   iconSearch: 'Icon name: {examples}',
   iconsShown: {
     one: 'Showing up to {limit} of {count} icon. Search to find the rest.',
@@ -57,6 +76,8 @@ export const strings: Dictionary<typeof en> = {
   en,
   ru: {
     allFiles: 'Все файлы',
+    bookmarks: 'Закладки',
+    noBookmarks: 'Закладок нет',
 
     commandNewFolder: 'Создать папку…',
     commandNewSubfolder: 'Создать подпапку в открытой папке…',
@@ -68,10 +89,18 @@ export const strings: Dictionary<typeof en> = {
     commandExpandAll: 'Развернуть все папки',
     commandOrderAlphabetical: 'Упорядочить папки по имени (от А до Я)',
     commandOrderAlphabeticalReverse: 'Упорядочить папки по имени (от Я до А)',
+    commandOrderModified: 'Упорядочить папки по дате изменения (сначала новые)',
+    commandOrderModifiedReverse: 'Упорядочить папки по дате изменения (сначала старые)',
+    commandOrderCreated: 'Упорядочить папки по дате создания (сначала новые)',
+    commandOrderCreatedReverse: 'Упорядочить папки по дате создания (сначала старые)',
 
     sortOrder: 'Порядок сортировки',
     orderAlphabetical: 'По имени (от А до Я)',
     orderAlphabeticalReverse: 'По имени (от Я до А)',
+    orderModified: 'По дате изменения (сначала новые)',
+    orderModifiedReverse: 'По дате изменения (сначала старые)',
+    orderCreated: 'По дате создания (сначала новые)',
+    orderCreatedReverse: 'По дате создания (сначала старые)',
     collapseAll: 'Свернуть все',
     expandAll: 'Развернуть все',
 
@@ -79,6 +108,8 @@ export const strings: Dictionary<typeof en> = {
     newFolderIn: 'Новая папка в «{name}»',
     newFolderItem: 'Новая папка…',
     newSubfolderItem: 'Новая подпапка…',
+    newSubfolder: 'Новая подпапка',
+    newFolderBeside: 'Новая папка рядом',
     newFolderBesideItem: 'Новая папка рядом…',
     create: 'Создать',
     name: 'Имя',
@@ -97,6 +128,28 @@ export const strings: Dictionary<typeof en> = {
     folderColorTitle: 'Цвет папки «{name}»',
     folderColorFailed: 'Цвет папки задать не удалось',
     folderIconFailed: 'Иконку папки задать не удалось',
+
+    foldersCount: {
+      one: '{count} папка',
+      few: '{count} папки',
+      many: '{count} папок',
+      other: '{count} папки',
+    },
+    foldersColorItem: 'Цвет папок…',
+    foldersIconItem: 'Иконка папок…',
+    foldersColorTitle: {
+      one: 'Цвет {count} папки',
+      few: 'Цвет {count} папок',
+      many: 'Цвет {count} папок',
+      other: 'Цвет {count} папки',
+    },
+    deleteFoldersItem: {
+      one: 'Удалить {count} папку',
+      few: 'Удалить {count} папки',
+      many: 'Удалить {count} папок',
+      other: 'Удалить {count} папки',
+    },
+    foldersDeleteFailed: 'Часть папок удалить не удалось — подробности в консоли',
 
     iconSearch: 'Название по-английски: {examples}',
     iconsShown: {

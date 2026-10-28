@@ -44,6 +44,7 @@ import { excerptStore, type ExcerptStore } from '../../platform/previews/excerpt
 import { excerptable, previewKind } from '../../platform/previews/plan.ts';
 import { previewStore, type PreviewStore } from '../../platform/previews/store.ts';
 import { settingsOf } from '../../platform/settings.ts';
+import { coverInFront } from '../../core/settings/settings.ts';
 import { BACK_BOX, coverSize, FRONT_BOX, MIDDLE } from '../../core/layout/cover-frame.ts';
 import type { CoverFrame } from '../../core/storage/types.ts';
 import { startFraming } from './cover-frame.ts';
@@ -329,32 +330,35 @@ const DOC_ASPECT = 0.8;
 type CardPlace = readonly [number, number, number];
 /**
  * Places of 1, 2 and 3 cards, back to front: at rest a loose stack inside the folder, on hover a fan, both a
- * little uneven (word of the owner 25.10).
+ * little uneven (word of the owner 25.10). The right card stands higher, so it shows above the raised right
+ * part of the front (word of the owner 26.10).
  */
 const CARD_REST: readonly (readonly CardPlace[])[] = [
   [],
   [[0, 12, -3]],
   [
     [-5, 12, -5],
-    [4, 10, 4],
+    [5, 4, 4],
   ],
   [
     [-6, 13, -7],
-    [5, 9.5, 5],
+    [6, 3.5, 5],
     [-1, 15.5, -2],
   ],
 ];
+// The fan stays inside the tile: a card fits 49 % and tilts up to 10°, so its center is at most 19 % off the
+// middle (word of the owner 26.10: files never stick out past the folder).
 const CARD_FAN: readonly (readonly CardPlace[])[] = [
   [],
   [[0, -6, -2]],
   [
-    [-16, 0, -8],
-    [16, -3, 7],
+    [-13, 0, -7],
+    [13, -3, 6],
   ],
   [
-    [-27, 0, -12],
-    [25, 2.5, 9],
-    [-2, -7, 2.5],
+    [-19, 0, -10],
+    [18, 2.5, 8],
+    [-1, -7, 2.5],
   ],
 ];
 /** A card fits a square of this share of the tile, %. */
@@ -504,11 +508,20 @@ const keptIn = (from: Waterfall, to: Waterfall): boolean =>
   from.extra === to.extra &&
   from.tall <= to.tall;
 
+/** File name without its extension, from a vault path. */
+function stemOf(path: string): string {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
 /**
  * The folder front's outline in the reference component's coordinates, the same path as the front mask in
- * folder-tiles.css (`--buba-fold-front-mask`, raised part on the left; the CSS mirrors it to the right).
+ * folder-tiles.css (`--buba-fold-front-mask`, raised part on the left; the CSS mirrors it to the right). The
+ * view box ends at the path's bottom, so the front's lower edge is the box's and the plate does not show
+ * under it.
  */
-const FOLD_VIEWBOX = '0 0 236.2 122.4';
+const FOLD_VIEWBOX = '0 0 236.2 122.05';
 const FOLD_PATH =
   'M104.615 0.350494L33.1297 0.838776C32.7542 0.841362 32.3825 0.881463 32.032 0.918854C31.6754 0.956907 31.3392 0.992086 31.0057 0.992096H31.0047C30.6871 0.99235 30.3673 0.962051 30.0272 0.929596C29.6927 0.897686 29.3384 0.863802 28.9803 0.866119L13.2693 0.967682H13.2527L13.2352 0.969635C13.1239 0.981406 13.0121 0.986674 12.9002 0.986237H9.91388C8.33299 0.958599 6.76052 1.22345 5.27423 1.76651H5.27325C4.33579 2.11246 3.48761 2.66213 2.7879 3.37393L2.49689 3.68839L2.492 3.69424C1.62667 4.73882 1.00023 5.96217 0.656067 7.27725C0.653324 7.28773 0.654065 7.29886 0.652161 7.30948C0.3098 8.62705 0.257231 10.0048 0.499817 11.3446L12.2147 114.399L12.2156 114.411L12.2176 114.423C12.6046 116.568 13.7287 118.508 15.3934 119.902C17.058 121.297 19.1572 122.056 21.3231 122.049V122.05H215.379C217.76 122.02 220.064 121.192 221.926 119.698V119.697C223.657 118.384 224.857 116.485 225.305 114.35L225.307 114.339L235.914 53.3798L235.968 53.1093L235.97 53.0985L235.971 53.0888C236.134 51.8978 236.044 50.685 235.705 49.5321C235.307 48.1669 234.63 46.9005 233.717 45.8144L233.383 45.4296C232.58 44.5553 231.614 43.8449 230.539 43.3398C229.311 42.7628 227.971 42.4685 226.616 42.4774H146.746C144.063 42.4705 141.423 41.8004 139.056 40.5263C136.691 39.2522 134.671 37.4127 133.175 35.1689L113.548 5.05948L113.544 5.05362L113.539 5.04776C112.545 3.65165 111.238 2.51062 109.722 1.72061C108.266 0.886502 106.627 0.422235 104.952 0.365143V0.364166L104.633 0.350494H104.615Z';
 
@@ -1448,7 +1461,7 @@ export class TileGrid {
     if (this.#aimed === el) this.#aimed = null;
     el.hide();
     if (this.#framing && el.dataset.path === this.#framing.path) this.#framing.stop();
-    el.removeClasses([TILE, 'is-folder', 'has-cover', 'has-frame', ...parts.marks]);
+    el.removeClasses([TILE, 'is-folder', 'has-cover', 'has-frame', 'is-title-text', ...parts.marks]);
     if (parts.fold) parts.fold.framed = '';
     parts.peeks = [];
     el.removeAttribute('data-path');
@@ -1549,8 +1562,13 @@ export class TileGrid {
     const file = item.kind === 'file';
     const picture = file ? item.path : this.#parts.get(el)!.picture;
     const url = (picture && this.#previews.get(picture)?.url) || '';
-    const text = (file && excerptable(item.file.ext) && this.#excerpts.get(item.path)) || '';
+    const read = file && excerptable(item.file.ext) ? this.#excerpts.get(item.path) : null;
+    // A note read and found without text (only properties, an embed, empty) shows its name on the same text
+    // card, so every note looks like a note (word of the owner 27.10: some notes were text, some the icon).
+    const title = read === '' && !url;
+    const text = title ? stemOf(item.path) : read || '';
     this.#setPreview(el, url, text);
+    el.toggleClass('is-title-text', title);
   }
 
   /**
@@ -2175,6 +2193,8 @@ export class TileGrid {
         const label = card.createSpan({ cls: 'buba-fold-page' });
         return { card, image, label };
       });
+      // The front's soft shadow on the files above it, under the front and the cover (folder-tiles.css).
+      thumb.createDiv({ cls: 'buba-fold-cast' });
       thumb.createDiv({ cls: 'buba-fold-front' });
       thumb.createDiv({ cls: 'buba-fold-shade' });
       // The selection line: the front's own path stroked in an SVG of the front's size, a stroke of one width
@@ -2243,7 +2263,7 @@ export class TileGrid {
     this.#framing?.stop();
     const state = { path, frame: parts.fold.frame ?? MIDDLE, stop: () => {} };
     this.#framing = state;
-    const front = () => settingsOf(this.#plugin).folderCover === 'front';
+    const front = () => coverInFront(settingsOf(this.#plugin));
     const shownEl = (): HTMLElement | undefined => {
       const at = this.#indexOf(path);
       const shown = at === undefined ? undefined : this.#shown.get(at);
@@ -2283,8 +2303,7 @@ export class TileGrid {
     const fold = parts.fold;
     const url = parts.url;
     const settings = settingsOf(this.#plugin);
-    if (!fold || fold.average === url || settings.folderCover !== 'front' || settings.folderPlate !== 'cover')
-      return;
+    if (!fold || fold.average === url || !coverInFront(settings) || settings.folderPlate !== 'cover') return;
     fold.average = url;
     if (!url) return;
     const known = this.#averages.get(url);
@@ -2309,6 +2328,18 @@ export class TileGrid {
   }
 
   /**
+   * Cards take a new place without moving there: only hover moves them (word of the owner 26.10: on entering
+   * a folder the files inside jumped from the last folder's places). `is-settling` turns their transitions
+   * off for two frames, so the new places are drawn as they are.
+   */
+  #settleCards(deck: HTMLElement | null): void {
+    if (!deck || deck.hasClass('is-settling')) return;
+    deck.addClass('is-settling');
+    const win = deck.win;
+    win.requestAnimationFrame(() => win.requestAnimationFrame(() => deck.removeClass('is-settling')));
+  }
+
+  /**
    * Cards in the folder: a picture or a document's first page in its own proportions, a document without a
    * preview as a page with its type; a picture whose preview has not come yet waits. Places by the count
    * (`CARD_REST`, `CARD_FAN`), written only on change.
@@ -2327,6 +2358,8 @@ export class TileGrid {
         return [{ url: '', aspect: PAGE_ASPECT, page, color: colorCss(formatFamily(ext).color) ?? '' }];
       },
     );
+    // An empty folder keeps the plain front; the glass is only for files to show through (folder-tiles.css).
+    fold.cards[0]?.card.parentElement?.toggleClass('has-cards', ready.length > 0);
     const rest = CARD_REST[ready.length]!;
     const fan = CARD_FAN[ready.length]!;
     fold.cards.forEach(({ card, image, label }, at) => {
@@ -2334,6 +2367,7 @@ export class TileGrid {
       const key = shown ? `${shown.url}|${shown.page}|${shown.aspect.toFixed(3)}|${ready.length}` : '';
       if (fold.shown[at] === key) return;
       fold.shown[at] = key;
+      this.#settleCards(card.parentElement);
       card.toggleClass('is-shown', shown !== undefined);
       card.toggleClass('is-page', shown !== undefined && shown.url === '');
       if (!shown) {

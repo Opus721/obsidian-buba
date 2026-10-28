@@ -1,7 +1,10 @@
 /* Buba tree: rows use Obsidian's tree classes (tree-item, collapse-icon,
-   tree-item-children, tree-item-flair). Only the folder or item icon after the
-   arrow and the click cursor are ours; values are Obsidian variables. One geometry
-   for the folder and tag trees; all borders and text baselines sit on whole CSS px.
+   tree-item-children, tree-item-flair). The folder or item icon and the click cursor
+   are ours; values are Obsidian variables. One geometry for the folder and tag trees;
+   all borders and text baselines sit on whole CSS px. In every theme the row has no
+   arrow column on the left: the icon opens and closes the row (src/platform/tree-press.ts),
+   a nesting line hangs under the parent's icon, and the arrow follows the name, only
+   showing the state, like the team name in Linear's sidebar (word of the owner 27.10).
 
    Numbers are variables set in one rule, and the geometry rules below read only them (the tree settings
    override these values). Phones get the same variables with their own numbers (`.is-phone`, not
@@ -9,22 +12,26 @@
    - `--buba-tree-row-pad`: row padding top and bottom (Obsidian derives it from `--nav-item-padding`);
    - `--buba-tree-indent`: nesting step, `--buba-tree-guide-at`: the level line, `--buba-tree-guide-color`:
      its color (lines are off by default: transparent, so rows do not shift);
-   - `--buba-tree-icon-shift`: arrow → icon; icon and name move away from the arrow, the arrow stays at the
-     edge;
+   - `--buba-tree-icon-shift`: row start → icon;
    - `--buba-tree-gap`: icon (a dot for tags) → name, shared by both trees;
-   - `--buba-tree-arrow-svg`: arrow icon size; `-arrow-x`, `-arrow-y`, `-folder-y`, `-plus-y`: icon offsets;
+   - `--buba-tree-arrow-svg`: arrow icon size, `--buba-tree-arrow-gap`: name → arrow;
+   - `-arrow-x`, `-arrow-y`, `-folder-y`, `-plus-y`: icon offsets;
    - `--buba-tree-text-y`: folder name and count, `--buba-tag-text-y`: tags, `--buba-tree-new-text-y`: "New
      folder" and "New tag". */
 .buba-tree {
   --buba-tree-row-pad: var(--buba-style-tree-row-pad, 3px);
   --buba-tree-indent: var(--buba-style-tree-indent, 16px);
-  --buba-tree-guide-at: 11px;
+  /* Under the middle of the parent's icon: the row start, the shift and half the icon (below). */
+  --buba-tree-guide-at: calc(
+    var(--size-4-2) + var(--buba-tree-icon-shift) + round(down, calc(round(var(--icon-xs), 1px) / 2), 1px)
+  );
   --buba-tree-guide-color: transparent;
   --buba-tree-icon-shift: var(--buba-style-tree-icon-shift, 2px);
   --buba-tree-gap: var(--buba-style-tree-gap, 8px);
-  --buba-tree-arrow-svg: 10px;
+  --buba-tree-arrow-svg: 8px;
+  --buba-tree-arrow-gap: 4px;
   --buba-tree-arrow-x: 0px;
-  --buba-tree-arrow-y: 0px;
+  --buba-tree-arrow-y: 1px;
   --buba-tree-folder-y: 0px;
   --buba-tree-plus-y: 0px;
   --buba-tree-text-y: -1px;
@@ -53,7 +60,7 @@
   cursor: var(--cursor);
   line-height: var(--buba-tree-line);
   padding-block: var(--buba-tree-row-pad);
-  padding-inline-start: calc(var(--size-4-6) + var(--buba-tree-icon-shift));
+  padding-inline-start: calc(var(--size-4-2) + var(--buba-tree-icon-shift));
 }
 
 /* Indent and level line use Obsidian's tree variables: level shift = line (margin) + padding after it. Every
@@ -66,26 +73,40 @@
   border-inline-start-color: var(--buba-tree-guide-color);
 }
 
-/* The arrow stays where Obsidian puts it, out of flow in the row indent
-   (`.tree-item-self .tree-item-icon`, app.css 1.14.4): an in-flow arrow shifted icon and
-   name by 4 px. The cell is one text line high, and the icon is offset from its top and
-   left edge by half the difference, rounded down, so borders land on whole pixels. */
+/* The arrow follows the name, in flow, in a cell one text line high and as wide as the arrow; Obsidian puts it
+   out of flow in the row indent (`.tree-item-self .tree-item-icon`, app.css 1.14.4). It only shows the state:
+   a press on it goes to the row and opens the folder, as on the name. It stands 4 px from the name, as it did
+   before 27.10 17:41: as far as the icon, 8 px, it looked detached (word of the owner 27.10 18:46). Its
+   middle is on the middle of the lowercase letters, a pixel below the line's middle: on the line's middle,
+   with the name's lift, it looked raised (word of the owner 27.10 17:28).
+   "Arrows after the name" off (Settings → Buba) hides it. */
 .buba-tree .tree-item-self > .collapse-icon {
-  position: absolute;
+  position: static;
+  order: 1;
+  flex: none;
   align-self: flex-start;
   align-items: flex-start;
-  justify-content: flex-start;
+  justify-content: center;
+  width: var(--buba-tree-arrow-svg);
   height: var(--buba-tree-line);
-  margin-inline-start: calc(-1 * var(--size-4-5) - var(--buba-tree-icon-shift));
+  margin: 0;
+  margin-inline-start: var(--buba-tree-arrow-gap);
+  padding: 0;
+  pointer-events: none;
   translate: var(--buba-tree-arrow-x) var(--buba-tree-arrow-y);
+}
+
+body.buba-tree-arrows-off .buba-tree .tree-item-self > .collapse-icon {
+  display: none;
 }
 
 .buba-tree .tree-item-self > .collapse-icon > svg {
   flex: none;
   width: var(--buba-tree-arrow-svg);
   height: var(--buba-tree-arrow-svg);
+  /* Obsidian's chevron is drawn on 24 units: at 8 px its 2 px line would thin to 0.7 px. */
+  stroke-width: 4.5px;
   margin-top: round(down, calc((var(--buba-tree-line) - var(--buba-tree-arrow-svg)) / 2), 1px);
-  margin-left: round(down, calc(50% - var(--buba-tree-arrow-svg) / 2), 1px);
 }
 
 /* The icon sits in a cell as high as the name's first line, like the "All tags" icon
@@ -133,11 +154,41 @@
   fill: var(--buba-color, transparent);
 }
 
-/* The name takes the free space, as in the tag tree: the count sits at the right
-   edge and the name width does not follow its letters. Name and count have their
-   own vertical offset; "New folder" shares one with "New tag" (tag-list.css). */
-.buba-tree .tree-item-inner {
-  flex-grow: 1;
+/* The name is as wide as its letters, so the arrow stands right after it; the count, and a tag group's
+   exclusive mark before it, sit at the right edge. Name and count have their own vertical offset; "New
+   folder" shares one with "New tag" (tag-list.css). */
+.buba-tree .tree-item-self > .tree-item-inner {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.buba-tree .tree-item-self > :is(.tree-item-flair-outer, .buba-tag-group-mark, .buba-tree-item-actions) {
+  order: 2;
+  margin-inline-start: auto;
+}
+
+.buba-tree .tree-item-self > :is(.buba-tag-group-mark, .buba-tree-item-actions) + .tree-item-flair-outer {
+  margin-inline-start: 0;
+}
+
+/* An item's own buttons ("+" of a section): Obsidian's small icon buttons in the row's height, just before the
+   count. */
+.buba-tree .buba-tree-item-actions {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: var(--size-2-1);
+  margin-inline-end: var(--size-2-2);
+}
+
+.buba-tree .buba-tree-item-actions > .clickable-icon {
+  padding: var(--size-2-1);
+}
+
+/* Header buttons of other modules ("New tag", view.ts): the box drops out of the layout, so they sit in
+   Obsidian's header row like its own buttons. */
+.buba-tree-header-own {
+  display: contents;
 }
 
 .buba-tree .tree-item-inner,

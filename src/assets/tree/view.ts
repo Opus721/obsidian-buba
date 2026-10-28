@@ -1,21 +1,26 @@
 // The Buba tree in the left sidebar: registry items at the top, below them the vault folders from the file
-// index, each row "arrow → icon → name → count" with its path in `data-path`. A click shows the tiles in the
-// main area, a double click or the arrow expands. An item with `menu` opens it on right-click, on a long
+// index, each row "icon → name → arrow → count" with its path in `data-path`. A click on the name shows the
+// tiles in the main area; a press on the icon or a double click expands, the arrow only shows the state
+// (src/platform/tree-press.ts). An item with `menu` opens it on right-click, on a long
 // press on a phone (the row listener is in src/platform/row-menus.ts; the row stays highlighted while
 // the menu is open). A folder row has the folder menu (folder-menu.ts): "New subfolder…" and "New folder
 // beside…", folder color and icon, then `file-menu`. The folder icon uses the folder's color and icon from
 // storage, by default a grey `lucide-folder-open`. A new root folder comes from the "+ New folder" row under
 // all folders (like "+ New tag"), the "New folder…" item of the "All files" menu, and the empty-space menu;
-// there is no header button. The tree shows a created folder at once: expands its parents, scrolls to it,
+// the header's "New folder alongside" and "New subfolder" buttons. The tree shows a created folder at once: expands its parents, scrolls to it,
 // highlights its row and on desktop opens it in the grid; on a phone it leaves the tree open for styling
-// (create-folder.ts). The header has the buttons of Obsidian's file explorer: "Sort order" (by name A to Z
-// and Z to A, at all levels, kept in the leaf state) and "Collapse/Expand all". The row of the folder shown
+// (create-folder.ts). The header has the buttons of Obsidian's file explorer: the two "New folder" ones, buttons other modules
+// register ("New tag"), "Sort order" (by name, modified
+// time and created time, each both ways, at all levels, kept in the leaf state; the dates are the folders'
+// own, read from disk, src/platform/files/folder-times.ts) and "Collapse/Expand all". The row of the folder shown
 // by the main grid has Obsidian's tree class `is-active`, like the open file in the file explorer; with
 // "Reveal the open folder in the tree" on, the tree expands its parents and scrolls to it. On a computer a
 // folder row can be dragged onto another folder row, "All files" or the empty space below the folders: the
 // folder moves there (src/assets/actions/tree-drop.ts); an item with `drop` takes drops on its row.
 // Delete deletes the highlighted folder after a confirmation while the last press was on a folder row, as in
 // Eagle and file managers: the click opens the grid, yet the key belongs to the tree (folder-actions.ts).
+// Ctrl (Cmd) and Shift pick several folder rows, as in Obsidian's file explorer, without opening them; the
+// menu, a drag and Delete on a picked row then act on all of them (folder-menu.ts `showFoldersMenu`).
 // Layout uses Obsidian's tree classes; names are text only, and a color goes into `style` only after the
 // pattern check.
 import {
@@ -32,7 +37,8 @@ import {
   type ViewStateResult,
   type WorkspaceLeaf,
 } from 'obsidian';
-import { ROOT } from '../../core/actions/new-folder.ts';
+import { scrollRowIntoField } from '../../platform/scroll-row.ts';
+import { newFolderParent, ROOT } from '../../core/actions/new-folder.ts';
 import { colorCss } from '../../core/color/value.ts';
 import { t } from '../../core/i18n/dict/tree.ts';
 import { treeFolderIcon } from '../../core/icon/choices.ts';
@@ -41,27 +47,41 @@ import { movedPath, normalizeGridViewState } from '../../core/layout/view-state.
 import type { FolderLook } from '../../core/storage/types.ts';
 import type { FileIndex } from '../../platform/files/file-index.ts';
 import { iconButton } from '../../platform/icon-button.ts';
+import { BATCH_FRAME_MS, batchRunning, onBatchEnd } from '../../platform/files/batch.ts';
+import { folderTimes, type FolderTimes } from '../../platform/files/folder-times.ts';
 import { vaultFileIndex } from '../../platform/files/vault-index.ts';
 import { settingsOf } from '../../platform/settings.ts';
-import type { BubaAssets, TreeItem, TreeItemDrop } from '../api.ts';
+import { onMiddleClick } from '../../platform/middle-click.ts';
+import type { BubaAssets, TreeItem, TreeItemAction, TreeItemDrop } from '../api.ts';
 import { contrastClasses } from '../color/dot.ts';
 import { openGrid } from '../index.ts';
 import { passportStorage } from '../../platform/passports.ts';
 import { RowMenus, showRowMenu, type MenuAt, type RowMenuAt } from '../../platform/row-menus.ts';
+import { foldPress } from '../../platform/tree-press.ts';
 import { dragExpander } from '../../platform/drag-expand.ts';
 import { collapseMotion, expandMotion } from '../../platform/fold-motion.ts';
 import { endTreeRowDrag, startTreeRowDrag, treeRowDrag } from '../../platform/tree-drag.ts';
 import { isTypingTarget } from '../../core/tags/keys.ts';
+import {
+  clear as noPick,
+  extend as extendPick,
+  prune as prunePick,
+  rename as renamePick,
+  select as selectPick,
+  toggle as togglePick,
+  type Selection,
+} from '../../core/selection/selection.ts';
 import { nameOf } from '../../platform/files/file-index.ts';
 import { addNewFolderItem, drawNewFolderRow, openNewFolder } from './create-folder.ts';
-import { deleteFolder } from './folder-actions.ts';
-import { showFolderMenu, type FolderLookStorage } from './folder-menu.ts';
+import { deleteFolder, deleteFolders } from './folder-actions.ts';
+import { showFolderMenu, showFoldersMenu, type FolderLookStorage } from './folder-menu.ts';
 import {
   collapseAll,
   expandAll,
   expandedFromState,
   expandParents,
   FOLDER_ORDERS,
+  isDateOrder,
   orderFromState,
   renameExpanded,
   treeRows,
@@ -115,6 +135,12 @@ const FOLDER_ROW = '.tree-item-self[data-path]';
 const SPACE = 'buba-tree-space';
 /** Selected row: Obsidian's active tree item class (`.tree-item-self.is-active`: background and color). */
 const ACTIVE = 'is-active';
+/** Picked rows, two or more: Obsidian's class for files picked in its file explorer (accent background). */
+const PICKED = 'is-selected';
+/** How long after a drop on the tree its redraws keep the row under the drop in place (`#dropAnchor`). */
+const DROP_ANCHOR_MS = 5000;
+/** Longest wait for the children's dates before a folder in a date order expands anyway (slow disk). */
+const TIMES_WAIT_MS = 300;
 /** Row under a drop: the class Obsidian's file explorer puts on the folder under a drag, drawn by the theme. */
 const OVER = 'is-being-dragged-over';
 /** Rows on the path to the open folder: the Buba theme draws their lines in the folder's color. */
@@ -123,23 +149,37 @@ const PATH = 'mod-active-path';
 const ORDER_TITLES = {
   alphabetical: 'orderAlphabetical',
   alphabeticalReverse: 'orderAlphabeticalReverse',
+  byModifiedTime: 'orderModified',
+  byModifiedTimeReverse: 'orderModifiedReverse',
+  byCreatedTime: 'orderCreated',
+  byCreatedTimeReverse: 'orderCreatedReverse',
 } as const satisfies Readonly<Record<FolderOrder, string>>;
 
 /**
- * A press that expands or collapses the row: on the arrow, or on the folder or item icon while the theme
- * hides the arrow (the Buba theme: the closed or open icon tells the state). A hidden arrow has no boxes.
- * Elsewhere, and on the icon of a folder without subfolders, the press opens the folder, as on the name.
+ * A press on a folder or item icon: it expands or does nothing, never selects. Clicks use `foldPress` instead,
+ * which also takes the row's start before the icon; this narrow rule decides whose Delete it is.
  */
 function onFold(at: Element): boolean {
-  if (at.closest('.collapse-icon')) return true;
-  const arrow = at.closest('.buba-tree-icon')?.parentElement?.querySelector(':scope > .collapse-icon');
-  return !!arrow && arrow.getClientRects().length === 0;
+  return !!at.closest('.buba-tree-icon');
+}
+
+/**
+ * A click in the icon's zone: `foldPress` on the row of `at` (src/platform/tree-press.ts). It expands or
+ * collapses a row with subfolders and does nothing on one without.
+ */
+function clickFolds(self: HTMLElement, at: Element, x: number): boolean {
+  const arrow = self.hasClass('mod-collapsible') ? self.querySelector(':scope > .collapse-icon') : null;
+  const icon = self.querySelector(':scope > .buba-tree-icon');
+  const name = self.querySelector<HTMLElement>(':scope > .tree-item-inner');
+  return foldPress({ arrow, icon, name }, at, x);
 }
 
 export class TreeView extends ItemView {
   readonly #plugin: Plugin;
   readonly #assets: BubaAssets;
   readonly #index: FileIndex;
+  /** Folder times for the date orders, read from disk only once such an order is chosen. */
+  #times: FolderTimes | null = null;
   /** Expanded folders live in the leaf state and survive a restart. */
   #expanded = new Set<string>();
   /** Folder order lives in the leaf state, like `sortOrder` of Obsidian's file explorer. */
@@ -166,6 +206,13 @@ export class TreeView extends ItemView {
    */
   #active: string | null = null;
   #activeEl: HTMLElement | null = null;
+  /**
+   * Folder rows picked with Ctrl (Cmd) and Shift, as in Obsidian's file explorer: Ctrl adds or removes a row,
+   * Shift picks the run of shown rows from the anchor; a plain click opens the folder and leaves one row.
+   * Two or more picked rows are marked `PICKED`, and the menu, a drag and Delete on one of them act on all.
+   */
+  #pick: Selection = noPick();
+  #pickedEls: HTMLElement[] = [];
   /** `.tree-item`s marked `PATH` by the last `#markPath`. */
   #pathEls: HTMLElement[] = [];
   /** A folder expanded by a click: its children grow on the next render (`expandMotion`). */
@@ -173,15 +220,24 @@ export class TreeView extends ItemView {
   /** Folders, and registry items by id, whose children are shrinking after a click; a click waits for the end. */
   readonly #shrinking = new Set<string>();
   readonly #shrinkingItems = new Set<string>();
+  /** Folders waiting for their children's dates before they expand (`#childTimes`); a click waits too. */
+  readonly #waiting = new Set<string>();
   /** Folder to scroll to once its row is drawn: the index may learn about a new folder later. */
   #scrollTarget: string | null = null;
   /**
    * The field is hidden, so scrolling waits until it is shown (`onNodeInserted`); only one wait at a time.
    */
   #scrollQueued = false;
+  /**
+   * Where something was just dropped on the tree, in window coordinates, and until when: while the move
+   * redraws the tree (new places, folder times in a date order), the row under that point keeps its place on
+   * screen and the rest moves around it (word of the owner 27.10: nothing jumps where the drop was).
+   */
+  #dropAnchor: { y: number; until: number } | null = null;
   // The index notifies on every change, and a folder deletion on every file: one re-render per frame.
   readonly #dirty = new Set<Part>();
   #frame = 0;
+  #paced = 0;
   #open = false;
   /**
    * Row menus of the tree: one finger, so the touch state is shared across the tree, as for "All tags" rows.
@@ -236,6 +292,40 @@ export class TreeView extends ItemView {
     this.#open = true;
     const header = this.containerEl.createDiv({ cls: 'nav-header', prepend: true });
     const buttons = header.createDiv({ cls: 'nav-buttons-container' });
+    // "New folder alongside" and "New subfolder", as in the folder menu and with its icons: next to the folder the
+    // main grid shows and inside it, both in the root when it shows none (words of the owner 27.10 21:59 and 22:37: on a phone
+    // there was no way to them but the menus).
+    for (const [label, icon, place] of [
+      ['newFolderBeside', 'folder-plus', 'beside'],
+      ['newSubfolder', 'folder-symlink', 'inside'],
+    ] as const) {
+      const button = iconButton(
+        buttons.createDiv({ cls: 'clickable-icon nav-action-button', attr: { 'aria-label': t(label) } }),
+      );
+      setIcon(button, icon);
+      button.addEventListener('click', () => {
+        // The folder the main grid shows, as the user sees it: not the tree's highlight, which on a phone stays on
+        // a folder just created while the grid keeps its place, and is not set yet right after a phone start.
+        const shown = this.#shownFolder();
+        const open = shown !== null && this.app.vault.getFolderByPath(shown) ? shown : null;
+        this.#newFolder(open === null ? ROOT : newFolderParent(open, place));
+      });
+    }
+    // Other modules' buttons ("New tag"), redrawn when the registry changes; the box has `display: contents`
+    // in tree.css, so they lie in Obsidian's header row like its own buttons.
+    const own = buttons.createDiv({ cls: 'buba-tree-header-own' });
+    const drawOwn = (): void => {
+      own.empty();
+      for (const each of this.#assets.treeButtons()) {
+        const button = iconButton(
+          own.createDiv({ cls: 'clickable-icon nav-action-button', attr: { 'aria-label': each.title } }),
+        );
+        setIcon(button, each.icon);
+        button.addEventListener('click', (evt) => each.run(evt));
+      }
+    };
+    drawOwn();
+    this.register(this.#assets.onChange(drawOwn));
     this.#addSortButton(buttons);
     this.#toggleEl = iconButton(buttons.createDiv({ cls: 'clickable-icon nav-action-button' }));
     this.#toggleEl.addEventListener('click', () => this.#toggleAll());
@@ -249,19 +339,29 @@ export class TreeView extends ItemView {
     this.#listenDelete();
     this.#listenCutNames();
     this.register(this.#assets.onChange(() => this.#schedule('items')));
+    this.register(
+      this.#assets.onExpandTreeItem((id) => {
+        const row = this.#items.find((each) => each.item.id === id);
+        if (row && !this.#openItems.has(id)) this.#toggleItem(row);
+      }),
+    );
     this.register(this.#index.onChange(() => this.#schedule('folders')));
     // Folder looks have their own storage channel: tag edits do not wake the tree.
     const storage = this.#storage();
     if (storage) this.register(storage.onFolderLook(() => this.#schedule('looks')));
     this.registerEvent(this.app.vault.on('rename', (file, oldPath) => this.#renamed(file, oldPath)));
+    this.register(
+      onBatchEnd(() => {
+        if (this.#paced) this.#draw();
+      }),
+    );
     this.#mountItems();
     this.#renderFolders();
   }
 
   override async onClose(): Promise<void> {
     this.#open = false;
-    if (this.#frame) this.contentEl.win.cancelAnimationFrame(this.#frame);
-    this.#frame = 0;
+    this.#stopDraw();
     this.#spaceMenus.stop();
     this.#unmountItems();
   }
@@ -291,16 +391,27 @@ export class TreeView extends ItemView {
   #schedule(part: Part): void {
     if (!this.#open) return;
     this.#dirty.add(part);
-    if (this.#frame) return;
-    this.#frame = this.contentEl.win.requestAnimationFrame(() => {
-      this.#frame = 0;
-      const dirty = new Set(this.#dirty);
-      this.#dirty.clear();
-      if (dirty.has('items')) this.#mountItems();
-      else if (dirty.has('counts')) this.#updateCounts();
-      if (dirty.has('folders')) this.#renderFolders();
-      if (dirty.has('looks')) this.#updateLooks();
-    });
+    if (this.#frame || this.#paced) return;
+    // During a large batch move every file renames: one redraw per `BATCH_FRAME_MS`, not per frame.
+    if (batchRunning()) this.#paced = this.contentEl.win.setTimeout(() => this.#draw(), BATCH_FRAME_MS);
+    else this.#frame = this.contentEl.win.requestAnimationFrame(() => this.#draw());
+  }
+
+  #draw(): void {
+    this.#stopDraw();
+    const dirty = new Set(this.#dirty);
+    this.#dirty.clear();
+    if (dirty.has('items')) this.#mountItems();
+    else if (dirty.has('counts')) this.#updateCounts();
+    if (dirty.has('folders')) this.#renderFolders();
+    if (dirty.has('looks')) this.#updateLooks();
+  }
+
+  #stopDraw(): void {
+    if (this.#frame) this.contentEl.win.cancelAnimationFrame(this.#frame);
+    this.contentEl.win.clearTimeout(this.#paced);
+    this.#frame = 0;
+    this.#paced = 0;
   }
 
   // Registry items: "icon → name → count"; an item with `render` gets an arrow and its content under the row.
@@ -313,21 +424,34 @@ export class TreeView extends ItemView {
       const self = el.createDiv({ cls: 'tree-item-self is-clickable' });
       const arrow = item.render ? this.#arrow(self) : null;
       const icon = item.icon ? this.#icon(self, item.icon) : null;
-      self.createDiv({ cls: 'tree-item-inner', text: item.title });
+      const name = self.createDiv({ cls: 'tree-item-inner', text: item.title });
+      const parts = { arrow, icon, name };
+      if (item.actions?.length) this.#actions(self, item.actions);
       const flair = item.count ? this.#flair(self, item.count()) : null;
       const row: ItemRow = { item, el, arrow, icon, flair, children: null, cleanup: null, off: null };
       if (flair && item.onChange) row.off = item.onChange(() => this.#schedule('counts'));
-      // The arrow, and the whole row of an item without a grid ("All tags"), toggles on every click, as in
-      // Obsidian's file explorer; on the name the second click of a double click does not open the grid
-      // again, the `dblclick` below expands.
+      // The icon, and the whole row of an item without a grid ("All tags"), toggles on every click, as the
+      // arrow of Obsidian's file explorer; on the name the second click of a double click does not open the
+      // grid again, the `dblclick` below expands.
       self.addEventListener('click', (evt) => {
         if (item.menu && !this.#menus.click()) return;
-        if ((arrow && onFold(evt.target as Element)) || !item.source) this.#toggleItem(row);
-        else if (evt.detail <= 1) void this.#assets.openGrid(item.source);
+        if (!item.source) this.#toggleItem(row);
+        else if (foldPress(parts, evt.target as Element, evt.clientX)) {
+          if (arrow) this.#toggleItem(row);
+        } else if (evt.detail <= 1) void this.#assets.openGrid(item.source);
       });
       self.addEventListener('dblclick', (evt) => {
-        if (item.source && arrow && !onFold(evt.target as Element)) this.#toggleItem(row);
+        if (item.source && arrow && !foldPress(parts, evt.target as Element, evt.clientX))
+          this.#toggleItem(row);
       });
+      // The middle button opens the item's grid in a new tab, as a folder in Obsidian's file explorer.
+      const { source } = item;
+      if (source)
+        onMiddleClick(
+          self,
+          () => source,
+          (found) => void this.#assets.openGrid(found, true),
+        );
       if (item.menu) this.#listenMenu(self, item);
       if (item.drop) this.#listenDrop(self, item.drop);
       this.#items.push(row);
@@ -454,19 +578,27 @@ export class TreeView extends ItemView {
       win,
       'keydown',
       (evt) => {
-        if (this.#keys === null || this.#keys !== this.#active || evt.key !== 'Delete') return;
+        const many = this.#keys !== null && this.#picked().includes(this.#keys);
+        if (this.#keys === null || (!many && this.#keys !== this.#active) || evt.key !== 'Delete') return;
         if (evt.isComposing || evt.keyCode === 229) return;
         if (evt.ctrlKey || evt.metaKey || evt.altKey || evt.shiftKey) return;
         const doc = this.contentEl.doc;
         if (isTypingTarget(evt.target as Element | null)) return;
         if (doc.body.querySelector('.modal-container, .menu')) return;
-        const folder = this.app.vault.getFolderByPath(this.#keys);
+        const folders = many ? this.#pickedFolders() : [this.app.vault.getFolderByPath(this.#keys)];
+        const [folder] = folders;
         if (!folder) return;
         evt.preventDefault();
         evt.stopPropagation();
         if (evt.repeat) return;
         this.#keys = null;
-        void deleteFolder(this.app, folder, passportStorage(this.#plugin));
+        if (folders.length > 1)
+          void deleteFolders(
+            this.app,
+            folders.filter((each) => each !== null),
+            passportStorage(this.#plugin),
+          );
+        else void deleteFolder(this.app, folder, passportStorage(this.#plugin));
       },
       { capture: true },
     );
@@ -524,6 +656,15 @@ export class TreeView extends ItemView {
     }
   }
 
+  /** The plugin's folder times, subscribed on first use: a tree sorted by name reads no dates. */
+  #folderTimes(): FolderTimes {
+    if (!this.#times) {
+      this.#times = folderTimes(this.#plugin);
+      this.register(this.#times.onChange(() => this.#schedule('folders')));
+    }
+    return this.#times;
+  }
+
   #updateCounts(): void {
     for (const { item, flair } of this.#items) if (flair && item.count) flair.setText(String(item.count()));
   }
@@ -532,9 +673,31 @@ export class TreeView extends ItemView {
   // the same as last time (a file was added or removed), only the counts change: a full rebuild of 2,000
   // expanded folders takes about 0.1 s.
 
+  /** The drawn row under the last drop point while it holds (`#dropAnchor`), with its top on screen. */
+  #anchorRow(): { path: string; top: number } | null {
+    const anchor = this.#dropAnchor;
+    if (!anchor || Date.now() > anchor.until) return (this.#dropAnchor = null);
+    let best: { path: string; top: number } | null = null;
+    let gap = Infinity;
+    this.#selves.forEach((self, at) => {
+      const box = self.getBoundingClientRect();
+      const off = anchor.y < box.top ? box.top - anchor.y : anchor.y > box.bottom ? anchor.y - box.bottom : 0;
+      if (off < gap) [gap, best] = [off, { path: this.#rows[at]!.path, top: box.top }];
+    });
+    return best;
+  }
+
+  /** After a rebuild: the field scrolls so the anchor row is where it was; gone from the tree, nothing moves. */
+  #keepAnchor(anchor: { path: string; top: number }, rows: readonly { path: string }[]): void {
+    const self = this.#selves[rows.findIndex((row) => row.path === anchor.path)];
+    if (self) this.contentEl.scrollTop += self.getBoundingClientRect().top - anchor.top;
+  }
+
   #renderFolders(): void {
     if (!this.#foldersEl) return;
-    const rows = treeRows(this.#index, this.#expanded, this.#order);
+    const times = isDateOrder(this.#order) ? this.#folderTimes() : null;
+    const time = times ? (path: string) => times.get(path) : undefined;
+    const rows = treeRows(this.#index, this.#expanded, this.#order, time);
     const before = this.#rows;
     const same =
       rows.length === before.length &&
@@ -548,7 +711,11 @@ export class TreeView extends ItemView {
       rows.forEach((row, at) => {
         if (row.count !== before[at]!.count) this.#flairs[at]!.setText(String(row.count));
       });
-    } else this.#buildFolders(this.#foldersEl, rows);
+    } else {
+      const anchor = this.#anchorRow();
+      this.#buildFolders(this.#foldersEl, rows);
+      if (anchor) this.#keepAnchor(anchor, rows);
+    }
     this.#rows = rows;
     if (this.#grow !== null) {
       const children = this.#childrenOf(this.#grow);
@@ -587,7 +754,7 @@ export class TreeView extends ItemView {
         icon: '',
         color: undefined,
       };
-      this.#paint(icon, row.path, row.expanded);
+      this.#paint(icon, row.path, row.expanded, row.hasChildren);
       this.#icons.push(icon);
       self.createDiv({ cls: 'tree-item-inner', text: row.name });
       this.#flairs.push(this.#flair(self, row.count));
@@ -601,7 +768,7 @@ export class TreeView extends ItemView {
   #updateLooks(): void {
     this.#rows.forEach((row, at) => {
       const icon = this.#icons[at];
-      if (icon) this.#paint(icon, row.path, row.expanded);
+      if (icon) this.#paint(icon, row.path, row.expanded, row.hasChildren);
     });
   }
 
@@ -609,11 +776,12 @@ export class TreeView extends ItemView {
    * Icon: `setIcon` only when the id changes; color: `--buba-color` after `colorCss` and the contrast
    * classes, as for the tag dot, on the icon and on the row (`mod-folder-color`). An uncolored row gets
    * `--buba-color: initial`, otherwise it would inherit the parent folder's color. Without its own icon the
-   * folder is open while `open` (expanded) and closed otherwise: in the Buba theme the icon replaces the arrow.
+   * folder is open while `open` (expanded) and closed otherwise, with a line along its edge while it has
+   * subfolders (`nested`): in the Buba theme the icon replaces the arrow.
    */
-  #paint(icon: FolderIcon, path: string, open: boolean): void {
+  #paint(icon: FolderIcon, path: string, open: boolean, nested: boolean): void {
     const look = this.#storage()?.folderLook(path) ?? NO_LOOK;
-    const id = treeFolderIcon(look.icon, (each) => this.#knows(each), open);
+    const id = treeFolderIcon(look.icon, (each) => this.#knows(each), open, nested);
     if (id !== icon.icon) {
       setIcon(icon.el, id);
       icon.icon = id;
@@ -650,7 +818,9 @@ export class TreeView extends ItemView {
     const target = (evt: MouseEvent) => {
       const at = evt.target as Element;
       const self = at.closest<HTMLElement>(FOLDER_ROW);
-      return self ? { self, path: self.dataset.path ?? '', onArrow: onFold(at) } : null;
+      return self
+        ? { self, path: self.dataset.path ?? '', onArrow: clickFolds(self, at, evt.clientX) }
+        : null;
     };
     // The folder row menu is delegated: rows get rebuilt, the listeners are one set per container.
     this.#menus.attach(container, (at) => this.#folderMenu(at), FOLDER_ROW);
@@ -658,14 +828,31 @@ export class TreeView extends ItemView {
       const hit = target(evt);
       // A click after a long press (the menu is already shown) or a finger move does not open the folder.
       if (!hit || !this.#menus.click()) return;
-      // The arrow toggles on every click, as in Obsidian's file explorer: a click within the double-click
-      // time is the second of a series (`detail` 2), and dropping it left the folder as it was. On the name
-      // the second click does not open the grid again, the `dblclick` below expands.
-      if (hit.onArrow) this.#toggleFolder(hit.path, true);
-      else if (evt.detail <= 1) void openGrid(this.#plugin, hit.path);
+      // The icon toggles on every click, as the arrow of Obsidian's file explorer: a click within the
+      // double-click time is the second of a series (`detail` 2), and dropping it left the folder as it was.
+      // On a folder without subfolders the icon does nothing. On the name the second click does not open the
+      // grid again, the `dblclick` below expands.
+      if (hit.onArrow) {
+        if (hit.self.hasClass('mod-collapsible')) this.#toggleFolder(hit.path, true);
+      } else if (evt.shiftKey || evt.ctrlKey || evt.metaKey) this.#pickRow(hit.path, evt);
+      else if (evt.detail <= 1) {
+        this.#setPick(selectPick(this.#pick, hit.path));
+        void openGrid(this.#plugin, hit.path);
+      }
     });
+    // The middle button opens the folder's grid in a new tab, as Obsidian's file explorer. Ctrl+click stays the
+    // pick of several folders (#pickRow), as the owner checked it 27.10.
+    onMiddleClick(
+      container,
+      (evt) => {
+        const hit = target(evt);
+        return hit && !hit.onArrow ? hit.path : null;
+      },
+      (path) => void openGrid(this.#plugin, path, true),
+    );
     container.addEventListener('dblclick', (evt) => {
       const hit = target(evt);
+      if (evt.shiftKey || evt.ctrlKey || evt.metaKey) return;
       if (hit && !hit.onArrow && hit.self.hasClass('mod-collapsible')) this.#toggleFolder(hit.path, true);
     });
     // A folder row drag: the ghost shows the row's icon and name; drops are taken by folder rows
@@ -674,7 +861,11 @@ export class TreeView extends ItemView {
       const hit = target(evt);
       if (!hit) return;
       const icon = this.#icons[this.#rows.findIndex((row) => row.path === hit.path)]?.icon || 'folder';
-      startTreeRowDrag(evt, { kind: 'folder', path: hit.path }, icon, nameOf(hit.path));
+      const picked = this.#picked();
+      // A picked row drags all picked rows, outer ones only: a folder inside another picked one goes with it.
+      const paths = picked.includes(hit.path) ? outermost(picked) : [hit.path];
+      const name = paths.length > 1 ? t('foldersCount', { count: paths.length }) : nameOf(hit.path);
+      startTreeRowDrag(evt, { kind: 'folder', path: hit.path, paths }, icon, name);
     });
     // A collapsed folder held under a drag expands after Obsidian's wait (src/platform/drag-expand.ts), so a
     // drop can go deeper and shows where it landed; the dragged folder and folders inside it do not expand.
@@ -684,7 +875,7 @@ export class TreeView extends ItemView {
       const dragged = treeRowDrag(evt.dataTransfer);
       const own =
         dragged?.kind === 'folder' &&
-        (hit?.path === dragged.path || hit?.path.startsWith(`${dragged.path}/`));
+        dragged.paths.some((path) => hit?.path === path || hit?.path.startsWith(`${path}/`));
       if (!hit || own) return expander.clear();
       const collapsed = hit.self.hasClass('mod-collapsible') && !this.#expanded.has(hit.path);
       expander.over(container.win, hit.path, collapsed, () => {
@@ -694,13 +885,37 @@ export class TreeView extends ItemView {
     container.addEventListener('dragleave', (evt) => {
       if (!container.contains(evt.relatedTarget as Node | null)) expander.clear();
     });
-    container.addEventListener('drop', () => expander.clear());
+    container.addEventListener('drop', (evt) => {
+      expander.clear();
+      this.#dropAnchor = { y: evt.clientY, until: Date.now() + DROP_ANCHOR_MS };
+    });
     container.addEventListener('dragend', () => expander.clear());
   }
 
   /** The row's folder from Obsidian: the file index may be ahead of the vault, and then there is no menu. */
   #folderMenu(at: RowMenuAt): void {
-    const folder = this.app.vault.getFolderByPath(at.row.dataset.path ?? '');
+    const path = at.row.dataset.path ?? '';
+    const picked = this.#picked();
+    if (picked.includes(path)) {
+      const folders = picked
+        .map((each) => this.app.vault.getFolderByPath(each))
+        .filter((each) => each !== null);
+      const outer = this.#pickedFolders().filter((each) => each !== null);
+      if (folders.length > 1) {
+        showFoldersMenu(
+          this.app,
+          this.#storage(),
+          folders,
+          outer,
+          at,
+          TREE_VIEW_TYPE,
+          this.leaf,
+          passportStorage(this.#plugin),
+        );
+        return;
+      }
+    }
+    const folder = this.app.vault.getFolderByPath(path);
     if (folder)
       showFolderMenu(
         this.app,
@@ -791,6 +1006,7 @@ export class TreeView extends ItemView {
   }
 
   #markActive(): void {
+    this.#markPicked();
     this.#markPath();
     const at = this.#active === null ? -1 : this.#rows.findIndex((row) => row.path === this.#active);
     const el = at === -1 ? null : (this.#selves[at] ?? null);
@@ -823,6 +1039,51 @@ export class TreeView extends ItemView {
       }
   }
 
+  /**
+   * Ctrl (Cmd) adds or removes the row, Shift picks the shown rows from the anchor to it, Ctrl+Shift adds them;
+   * the folder is not opened. The first such click starts from the highlighted folder, as in Obsidian's file
+   * explorer, where the open file is picked together with the clicked one.
+   */
+  #pickRow(path: string, evt: MouseEvent): void {
+    let pick = this.#pick;
+    if (
+      pick.selected.size === 0 &&
+      this.#active !== null &&
+      this.#rows.some((row) => row.path === this.#active)
+    )
+      pick = selectPick(pick, this.#active);
+    const order = this.#rows.map((row) => row.path);
+    this.#setPick(
+      evt.shiftKey ? extendPick(pick, order, path, evt.ctrlKey || evt.metaKey) : togglePick(pick, path),
+    );
+  }
+
+  #setPick(pick: Selection): void {
+    this.#pick = pick;
+    this.#markPicked();
+  }
+
+  /** Picked folders that still exist, in tree order; one picked row is no pick. */
+  #picked(): string[] {
+    this.#pick = prunePick(this.#pick, (path) => this.app.vault.getFolderByPath(path) !== null);
+    const { selected } = this.#pick;
+    if (selected.size < 2) return [];
+    const order = this.#rows.map((row) => row.path).filter((path) => selected.has(path));
+    return [...order, ...[...selected].filter((path) => !order.includes(path))];
+  }
+
+  #pickedFolders() {
+    return outermost(this.#picked()).map((path) => this.app.vault.getFolderByPath(path));
+  }
+
+  #markPicked(): void {
+    for (const el of this.#pickedEls) el.removeClass(PICKED);
+    const { selected } = this.#pick;
+    this.#pickedEls =
+      selected.size < 2 ? [] : this.#selves.filter((el) => selected.has(el.dataset.path ?? ''));
+    for (const el of this.#pickedEls) el.addClass(PICKED);
+  }
+
   /** The children block of a drawn, expanded folder row. */
   #childrenOf(path: string): HTMLElement | null {
     const at = this.#rows.findIndex((row) => row.path === path);
@@ -833,12 +1094,8 @@ export class TreeView extends ItemView {
 
   /**
    * Once the folder row is drawn, the field scrolls so the whole row is visible; if it is not there yet, wait
-   * for the next render. The field is scrolled by rectangles rather than `scrollIntoView`, which also moves
-   * ancestors with `overflow: hidden`. The visible part is the field without its padding: on a phone Obsidian
-   * 1.14.4 puts the tree's floating buttons over the bottom of the field and gives it bottom padding for them
-   * (app.css, `.is-mobile.is-floating-nav.is-phone … .nav-header ~ div:last-child`). A hidden field (the
-   * phone drawer closed, the tree tab behind another) returns zero rectangles, so scrolling waits until it is
-   * shown, like `revealActiveFile` of Obsidian's file explorer (`isShown`, `onNodeInserted`, app.js 1.14.4).
+   * for the next render (src/platform/scroll-row.ts). A hidden field (the phone drawer closed, the tree tab
+   * behind another) returns zero rectangles, so scrolling waits until it is shown, like `revealActiveFile` of Obsidian's file explorer (`isShown`, `onNodeInserted`, app.js 1.14.4).
    */
   #scrollToTarget(): void {
     if (this.#scrollTarget === null) return;
@@ -856,13 +1113,7 @@ export class TreeView extends ItemView {
       return;
     }
     this.#scrollTarget = null;
-    const box = field.getBoundingClientRect();
-    const pad = field.win.getComputedStyle(field);
-    const top = box.top + (parseFloat(pad.paddingTop) || 0);
-    const bottom = box.bottom - (parseFloat(pad.paddingBottom) || 0);
-    const row = self.getBoundingClientRect();
-    if (row.top < top) field.scrollTop -= top - row.top;
-    else if (row.bottom > bottom) field.scrollTop += row.bottom - bottom;
+    scrollRowIntoField(field, self);
   }
 
   /**
@@ -878,13 +1129,16 @@ export class TreeView extends ItemView {
       evt.preventDefault();
       if (button.hasClass('has-active-menu')) return;
       const menu = new Menu().setNoIcon();
-      for (const order of FOLDER_ORDERS)
+      // Pairs apart, as in the file explorer: name, modified time, created time.
+      FOLDER_ORDERS.forEach((order, at) => {
+        if (at > 0 && at % 2 === 0) menu.addSeparator();
         menu.addItem((item) =>
           item
             .setTitle(t(ORDER_TITLES[order]))
             .setChecked(order === this.#order)
             .onClick(() => this.setOrder(order)),
         );
+      });
       menu.setParentElement(button).showAtMouseEvent(evt);
     });
   }
@@ -903,9 +1157,22 @@ export class TreeView extends ItemView {
    * Expand or collapse; `motion` (a click, not a drag or a command): the children grow after the render or
    * shrink first, while the icon and the arrow already show the new state (src/platform/fold-motion.ts).
    */
-  #toggleFolder(path: string, motion = false): void {
-    if (this.#shrinking.has(path)) return;
+  #toggleFolder(path: string, motion = false, waited = false): void {
+    if (this.#shrinking.has(path) || this.#waiting.has(path)) return;
     if (!this.#expanded.has(path)) {
+      const wait = waited ? null : this.#childTimes(path);
+      if (wait) {
+        // In a date order the rows that appear wait for their dates, at most `TIMES_WAIT_MS`: drawn by name
+        // first and reordered once the dates came in, they were rebuilt mid-motion and the folder jerked open,
+        // mostly folders not opened for a while, whose dates were not read yet.
+        this.#waiting.add(path);
+        const win = this.contentEl.win;
+        void Promise.race([wait, new Promise((done) => win.setTimeout(done, TIMES_WAIT_MS))]).then(() => {
+          this.#waiting.delete(path);
+          if (!this.#expanded.has(path)) this.#toggleFolder(path, motion, true);
+        });
+        return;
+      }
       this.#expanded.add(path);
       if (motion) this.#grow = path;
       this.#saveFolders();
@@ -919,13 +1186,30 @@ export class TreeView extends ItemView {
     }
     const at = this.#rows.findIndex((row) => row.path === path);
     const icon = this.#icons[at];
-    if (icon) this.#paint(icon, path, false);
+    if (icon) this.#paint(icon, path, false, true);
     this.#selves[at]?.querySelector(':scope > .collapse-icon')?.addClass('is-collapsed');
     this.#shrinking.add(path);
     collapseMotion(children, () => {
       this.#shrinking.delete(path);
       if (this.#expanded.delete(path)) this.#saveFolders();
     });
+  }
+
+  /**
+   * In a date order: `null` when the dates of the rows that expanding `path` shows (its subfolders and,
+   * under those still expanded, theirs) are known, else the promise of their read.
+   */
+  #childTimes(path: string): Promise<void> | null {
+    if (!isDateOrder(this.#order)) return null;
+    const paths: string[] = [];
+    const walk = (folder: string): void => {
+      for (const child of this.#index.subfolders(folder)) {
+        paths.push(child);
+        if (this.#expanded.has(child)) walk(child);
+      }
+    };
+    walk(path);
+    return this.#folderTimes().known(paths);
   }
 
   #toggleAll(): void {
@@ -952,6 +1236,7 @@ export class TreeView extends ItemView {
   // vanish from view, so its new parents are expanded and the tree scrolls to it.
   #renamed(file: TAbstractFile, oldPath: string): void {
     if (!(file instanceof TFolder)) return;
+    this.#pick = renamePick(this.#pick, oldPath, file.path);
     this.#expanded = renameExpanded(this.#expanded, oldPath, file.path);
     const active = this.#active === null ? null : movedPath(this.#active, oldPath, file.path);
     if (active !== null && active !== this.#active) {
@@ -988,11 +1273,35 @@ export class TreeView extends ItemView {
     setIcon(icon, open ? item.openIcon : item.icon);
   }
 
+  /**
+   * An item's own buttons, at the right edge before the count: Obsidian's `clickable-icon`; a press runs the
+   * action only, the row neither opens nor expands.
+   */
+  #actions(self: HTMLElement, actions: readonly TreeItemAction[]): void {
+    const box = self.createDiv({ cls: 'buba-tree-item-actions' });
+    for (const action of actions) {
+      const button = iconButton(
+        box.createDiv({ cls: 'clickable-icon', attr: { 'aria-label': action.title } }),
+      );
+      setIcon(button, action.icon);
+      button.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        action.run(evt);
+      });
+      button.addEventListener('dblclick', (evt) => evt.stopPropagation());
+    }
+  }
+
   #flair(self: HTMLElement, count: number): HTMLElement {
     return self
       .createDiv({ cls: 'tree-item-flair-outer' })
       .createSpan({ cls: 'tree-item-flair', text: String(count) });
   }
+}
+
+/** Paths without those inside another of them: a picked folder inside a picked one moves and goes with it. */
+function outermost(paths: readonly string[]): string[] {
+  return paths.filter((path) => !paths.some((other) => other !== path && path.startsWith(`${other}/`)));
 }
 
 /**

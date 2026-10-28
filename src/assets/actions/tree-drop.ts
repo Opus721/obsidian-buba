@@ -6,7 +6,8 @@
 // row are copied into the folder by the same write and report as a drop on the grid (`importInto`). A folder
 // dragged from the tree (src/platform/tree-drag.ts) is moved by the same batch move into the folder under it,
 // at its place by name, as in Obsidian's file explorer; into the vault root over "All files" and the empty
-// space (`moveFolder`, called by the tree). The core rule `treeDrop` decides what to do with a drop.
+// space (`moveFolders`, called by the tree). The core rule `treeDrop` decides what to do with a drop. A batch of
+// many tiles shows its progress with a "Stop" button (`moveProgress`).
 // Other drags are left alone.
 import { Notice, type App, type Plugin, type TAbstractFile } from 'obsidian';
 import { t } from '../../core/i18n/dict/actions.ts';
@@ -21,6 +22,7 @@ import type { BubaAssets } from '../api.ts';
 import { importInto } from './import-drop.ts';
 import { confirmLinkUpdates } from './links-setting.ts';
 import { moveNotice, registerResume } from './resume.ts';
+import { moveProgress } from './move-progress.ts';
 import { isOwnTileDrag } from './tile-drag.ts';
 
 const OVER = 'is-being-dragged-over';
@@ -62,7 +64,7 @@ export function registerTreeDrop(plugin: Plugin, _assets: BubaAssets): void {
       const folder = treeRowDrag(dt);
       if (folder?.kind === 'folder') {
         endTreeRowDrag();
-        void moveFolder(app, folder.path, target.folder);
+        void moveFolders(app, folder.paths, target.folder);
         return;
       }
       const paths = isOwnTileDrag(dt) ? (readBubaDragPaths(dt) ?? []) : null;
@@ -82,7 +84,7 @@ function dropTarget(app: App, evt: DragEvent): (TreeDropTarget & { row: HTMLElem
   const drag = treeRowDrag(dt);
   if (drag && drag.kind !== 'folder') return null;
   const target = treeDrop(
-    { buba: hasBubaDragData(dt), files: dt.types.includes('Files'), folder: drag?.path ?? null },
+    { buba: hasBubaDragData(dt), files: dt.types.includes('Files'), folders: drag?.paths ?? null },
     row?.dataset.path ?? null,
   );
   return target && row ? { ...target, row } : null;
@@ -104,34 +106,49 @@ async function dropInto(app: App, folder: string, paths: string[] | null): Promi
     return;
   }
   if (paths.length === 0 || !(await confirmLinkUpdates(app, paths))) return;
+  const progress = moveProgress(folder);
   try {
-    const result = await moveFiles(app, paths, folder);
-    // The moved files form one undo step: Ctrl+Z in the grid brings them back.
+    const result = await moveFiles(app, paths, folder, progress.watch);
+    progress.close();
+    // The moved files form one undo step: Ctrl+Z in the grid brings them back, after a stop too.
     recordMoves(app, result.moved, folder);
-    const head = result.moved.length
-      ? t('movedInto', { folder, count: result.moved.length })
-      : t('nothingMovedInto', { folder });
+    const { moved, failed, left } = result;
+    const head = left
+      ? t('moveStopped', { folder, moved: moved.length, total: moved.length + failed.length + left.length })
+      : moved.length
+        ? t('movedInto', { folder, count: moved.length })
+        : t('nothingMovedInto', { folder });
     moveNotice(head, result);
   } catch (error) {
+    progress.close();
     console.error('Buba: move into folder', error);
     new Notice(t('moveFailedJournal'));
   }
 }
 
 /**
- * Moves folder `path` into `to` (a folder path or `ROOT`) by the same batch move as tiles: the links dialog
+ * Moves folders `paths` into `to` (a folder path or `ROOT`) by the same batch move as tiles: the links dialog
  * counts links to the files inside, the move is one undo step. Success is silent, as in Obsidian's file
- * explorer: the folder shows at its new place, and if it was open the grid and the tree follow it. A refusal
- * (the name is taken there) or a failure gets the batch notice with the reason.
+ * explorer: the folders show at their new place, and if one was open the grid and the tree follow it. A
+ * refusal (the name is taken there) or a failure gets the batch notice with the reason.
  */
-export async function moveFolder(app: App, path: string, to: string): Promise<void> {
-  const folder = app.vault.getFolderByPath(path);
-  if (!folder || !(await confirmLinkUpdates(app, filesIn(folder)))) return;
+export async function moveFolders(app: App, paths: readonly string[], to: string): Promise<void> {
+  const folders = paths.map((path) => app.vault.getFolderByPath(path)).filter((folder) => folder !== null);
+  if (!folders.length || !(await confirmLinkUpdates(app, folders.flatMap(filesIn)))) return;
   try {
-    const result = await moveFiles(app, [path], to);
+    const result = await moveFiles(
+      app,
+      folders.map(({ path }) => path),
+      to,
+    );
     recordMoves(app, result.moved, to);
-    if (result.moved.length) return;
-    moveNotice(to === ROOT ? t('nothingMovedToRoot') : t('nothingMovedInto', { folder: to }), result);
+    if (result.moved.length === folders.length) return;
+    const head = result.moved.length
+      ? t('movedInto', { folder: to, count: result.moved.length })
+      : to === ROOT
+        ? t('nothingMovedToRoot')
+        : t('nothingMovedInto', { folder: to });
+    moveNotice(head, result);
   } catch (error) {
     console.error('Buba: folder not moved', error);
     new Notice(t('moveFailedJournal'));

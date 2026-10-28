@@ -3,7 +3,7 @@
 // order is as close to the intended layout as Obsidian allows: in a plugin-built menu groups appear in the
 // order their section first appears (`Menu.sort()`, app.js 1.14.4). So first the Buba event
 // `buba:folder-menu`, which puts the actions module's "Add files here…" (section `action-primary`) at the
-// very top; then "New subfolder…" and "New folder beside…" in section `action`, where Obsidian also puts
+// very top; then "New folder beside…" and "New subfolder…" in section `action`, where Obsidian also puts
 // "Move folder to..." and "Bookmark..."; there is no bare "New folder" because Obsidian's creates inside.
 // "Rename…" follows them in the same section, as Obsidian's file explorer puts "Rename..." among its actions.
 // Then "Folder color…" and "Folder icon…" in section `view`, then the `file-menu` event with the folder,
@@ -15,7 +15,8 @@
 // window (src/assets/color/picker.ts): fixed top row, the device's recent colors, the vault's pinned ones;
 // "Folder icon…" is the Lucide icon window (icon-picker.ts). The folder look is stored by path, taken from
 // the Obsidian folder at pick time: if the folder is renamed while the window is open, the look goes to the
-// new path. Without storage (journals failed to load) there are no look items.
+// new path. Without storage (journals failed to load) there are no look items. Several folders picked in the
+// tree with Ctrl and Shift get their own menu (`showFoldersMenu`).
 import { Menu, Notice, type App, type TFolder, type WorkspaceLeaf } from 'obsidian';
 import { newFolderParent, type NewFolderPlace } from '../../core/actions/new-folder.ts';
 import type { ColorValue } from '../../core/color/value.ts';
@@ -27,7 +28,7 @@ import { ownTitle } from '../../platform/menu-title.ts';
 import { openColorPicker } from '../color/picker.ts';
 import { showRowMenu, type RowMenuAt } from '../../platform/row-menus.ts';
 import type { PassportReader } from '../actions/menu-items.ts';
-import { deleteFolder, renameFolder } from './folder-actions.ts';
+import { deleteFolder, deleteFolders, renameFolder } from './folder-actions.ts';
 import { FolderIconModal } from './icon-picker.ts';
 
 /** What the folder menu takes from storage: folder looks and the color window's pinned colors. */
@@ -45,10 +46,13 @@ async function write(run: () => Promise<void>, failed: string, log: string): Pro
   }
 }
 
-/** Folder creation items: core decides the place; "beside" a root-level folder means the root. */
+/**
+ * Folder creation items: core decides the place; "beside" a root-level folder means the root. "Beside" goes
+ * first, the folder next to it is the more common one (word of the owner 26.10).
+ */
 const NEW_FOLDER_ITEMS = [
-  ['newSubfolderItem', 'inside', 'folder-symlink'],
   ['newFolderBesideItem', 'beside', 'folder-plus'],
+  ['newSubfolderItem', 'inside', 'folder-symlink'],
 ] as const satisfies readonly (readonly [title: string, place: NewFolderPlace, icon: string])[];
 
 /**
@@ -109,6 +113,87 @@ export function showFolderMenu(
       .onClick(() => void deleteFolder(app, folder, passports)),
   );
   return showRowMenu(menu, at);
+}
+
+/**
+ * Menu of several folders picked in the tree: "Color of folders…" and "Icon of folders…", which set the
+ * look of all picked `folders`, a folder inside another picked one too, then Obsidian's and modules' items
+ * for several files (`files-menu`, as its file explorer sends for a multi-selection), then "Delete N
+ * folders" in red. Moving and deleting take the `outer` ones: a picked folder inside another picked one goes
+ * with it, as in a drag (word of the owner 27.10: a parent and its child picked together got the one-folder
+ * menu).
+ */
+export function showFoldersMenu(
+  app: App,
+  storage: FolderLookStorage | undefined,
+  folders: readonly TFolder[],
+  outer: readonly TFolder[],
+  at: RowMenuAt,
+  source: string,
+  leaf: WorkspaceLeaf,
+  passports?: PassportReader,
+): Menu {
+  const menu = new Menu();
+  if (storage) {
+    menu.addItem((item) =>
+      item
+        .setSection('view')
+        .setTitle(ownTitle(t('foldersColorItem')))
+        .setIcon('palette')
+        .onClick(() => pickColors(app, storage, folders)),
+    );
+    menu.addItem((item) =>
+      item
+        .setSection('view')
+        .setTitle(ownTitle(t('foldersIconItem')))
+        .setIcon('shapes')
+        .onClick(() => pickIcons(app, storage, folders)),
+    );
+  }
+  app.workspace.trigger('files-menu', menu, outer, source, leaf);
+  menu.addItem((item) =>
+    item
+      .setSection('danger')
+      .setTitle(ownTitle(t('deleteFoldersItem', { count: outer.length })))
+      .setIcon('trash-2')
+      .setWarning(true)
+      .onClick(() => void deleteFolders(app, outer, passports)),
+  );
+  return showRowMenu(menu, at);
+}
+
+/** One color window for several folders: each pick goes to all of them; it opens on the first one's color. */
+function pickColors(app: App, storage: FolderLookStorage, folders: readonly TFolder[]): void {
+  const [first] = folders;
+  if (!first) return;
+  openColorPicker(app, {
+    title: t('foldersColorTitle', { count: folders.length }),
+    value: storage.folderLook(first.path).color,
+    pinned: pinnedColorsOf(storage),
+    onPick: (value: ColorValue | null) =>
+      void write(
+        async () => {
+          for (const { path } of folders) await storage.setFolderColor(path, value);
+        },
+        t('folderColorFailed'),
+        'folder colors not saved',
+      ),
+  });
+}
+
+/** One icon window for several folders: the pick goes to all of them. */
+function pickIcons(app: App, storage: FolderLookStorage, folders: readonly TFolder[]): void {
+  const [first] = folders;
+  if (!first) return;
+  new FolderIconModal(app, storage.folderLook(first.path).icon, (icon) => {
+    void write(
+      async () => {
+        for (const { path } of folders) await storage.setFolderIcon(path, icon);
+      },
+      t('folderIconFailed'),
+      'folder icons not saved',
+    );
+  }).open();
 }
 
 /** Color window: each pick is written at once and the window stays open; storage skips equal values. */

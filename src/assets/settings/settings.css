@@ -8,9 +8,28 @@ body:not(.is-phone) .buba-settings .setting-item-control select.dropdown {
   width: auto;
 }
 
-/* Subheadings inside "Appearance" (tab.ts `subheading`): smaller and greyer than the group heading. */
+/* Subheadings inside "Appearance" (tab.ts `subheading`): a small faint label like a Notion sidebar section
+   ("Private"), not a second heading (word of the owner 27.10 17:28). Obsidian gives a heading row in a card
+   16 px sides and 24 px above (app.css 1.14.5: `.setting-group .setting-item-heading`, `.vertical-tab-content
+   .setting-item ~ .setting-item-heading`); here it takes the rows' side padding, so its text starts where the
+   row names start, and sits nearer the rows it heads than the row above. */
+.buba-settings .setting-items > .setting-item.setting-item-heading.buba-setting-subheading {
+  margin: 0;
+  padding: var(--size-4-3) var(--setting-items-padding-x) 0;
+}
+
 .buba-settings .setting-item.setting-item-heading.buba-setting-subheading .setting-item-name {
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
-  font-weight: var(--font-semibold);
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-medium);
+}
+
+/* The first subheading opens the card: a row's top padding, so it does not touch the card's edge. */
+.buba-settings .setting-items > .setting-item.setting-item-heading.buba-setting-subheading:first-child {
+  padding-top: var(--size-4-5);
+}
+
+/* No divider between a subheading and its first row: Obsidian draws it as the row's `::before`. */
+.buba-settings .buba-setting-subheading + .setting-item::before {
+  display: none;
 }

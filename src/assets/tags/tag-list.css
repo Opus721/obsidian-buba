@@ -24,6 +24,12 @@
   --buba-tag-cell: 18px;
 }
 
+/* The tag search above the list: below its underline the same gap as Obsidian's above it (4px, measured
+   27.10), so the line has room on both sides and does not stick to the first tag (owner, 27.10 22:37). */
+.buba-tree .tree-item-children > .search-input-container {
+  margin-bottom: var(--size-4-1);
+}
+
 /* Icon cell as for folders: one first name line tall, the icon offset from its top and left edge by half the
    difference rounded down. Width matches a folder icon ("New tag" and groups); a tag gets its own circle
    cell. */
@@ -102,13 +108,9 @@
   fill: var(--buba-color, transparent);
 }
 
-/* The name takes the free space, so the exclusive mark and the count sit at the right edge. Name and count
-   have their own vertical offset, separate from folders; "New tag" shares the one of "New folder"
+/* The exclusive mark and the count sit at the right edge, the arrow right after the name (tree.css). Name and
+   count have their own vertical offset, separate from folders; "New tag" shares the one of "New folder"
    (tree.css). */
-.buba-tag-tree .tree-item-inner {
-  flex-grow: 1;
-}
-
 .buba-tree .buba-tag-tree .tree-item-inner,
 .buba-tree .buba-tag-tree .tree-item-flair-outer {
   translate: 0 var(--buba-tag-text-y);

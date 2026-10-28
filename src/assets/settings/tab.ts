@@ -19,7 +19,9 @@ import {
 import { t } from '../../core/i18n/dict/settings.ts';
 import type { DateFormat, TimeFormat } from '../../core/inspector/date.ts';
 import {
+  coverInFront,
   DEFAULT_SETTINGS,
+  lookDefaults,
   normalizeSettings,
   TREE_LINES_OPACITY,
   type BubaSettings,
@@ -32,8 +34,9 @@ import {
 } from '../../core/settings/settings.ts';
 import { coreSetting, enableCoreSetting, setCoreSetting } from '../../platform/core-settings.ts';
 import type { CoreFlag } from '../../platform/setup.ts';
-import { settingsChanged, settingsOf } from '../../platform/settings.ts';
+import { saveSettings, settingsChanged, settingsOf } from '../../platform/settings.ts';
 import { applyTreeLook } from '../../platform/tree-look.ts';
+import { confirmReset, type ResetScope } from './reset-confirm.ts';
 import { openSetupWindow } from './setup-window.ts';
 import './settings.css';
 
@@ -44,6 +47,7 @@ export const gridKeyLines = (): string[] => [
   t('gridKeyTag'),
   t('gridKeyRating'),
   t('gridKeySpace'),
+  t('gridKeySelectAll'),
   t('gridKeyUndo'),
 ];
 /**
@@ -108,14 +112,16 @@ const treeLinesOptions = (): Record<TreeLines, string> => ({
   color: t('treeLinesColor'),
 });
 const TREE_OPACITY_ROW = row('treeOpacity', 'treeOpacityDesc');
+const TREE_ARROWS_ROW = row('treeArrows', 'treeArrowsDesc');
 const TREE_ARROW_ROW = row('treeArrow', 'treeArrowDesc');
 const FOLDER_NAME_ROW = row('folderName', 'folderNameDesc');
 const TAG_NAME_ROW = row('tagName', 'tagNameDesc');
 /** Long names on one line with "…"; off means they wrap. */
 const NAME_ONE_LINE_ROW = row('nameOneLine', 'nameOneLineDesc');
-/** Folder tile in the grid: with the files inside it or without. */
+/** Folder tile in the grid: one picture as the cover, a few files inside, or none. */
 const FOLDER_TILE_ROW = row('folderTile', 'folderTileDesc');
 const folderTileOptions = (): Record<FolderTile, string> => ({
+  one: t('folderTileOne'),
   peek: t('folderTilePeek'),
   solid: t('folderTileSolid'),
 });
@@ -131,6 +137,8 @@ const folderPlateOptions = (): Record<FolderPlate, string> => ({
   grey: t('folderPlateGrey'),
   cover: t('folderPlateCover'),
 });
+/** Folder tile without its own cover: its newest picture, or empty in its color. */
+const FOLDER_AUTO_COVER_ROW = row('folderAutoCover', 'folderAutoCoverDesc');
 /** Selected folder tile: a line around the front, a tinted area or a framed area. */
 const FOLDER_SELECT_ROW = row('folderSelect', 'folderSelectDesc');
 const folderSelectOptions = (): Record<FolderSelect, string> => ({
@@ -178,8 +186,21 @@ const CORE_ROWS: readonly { key: CoreFlag; text: () => Row }[] = [
   { key: 'showUnsupportedFiles', text: row('showAllTypes', 'showAllTypesDesc') },
 ];
 
+/**
+ * Obsidian's "Confirm file deletion" (`promptDelete`), on unless turned off: Obsidian asks when the key is
+ * not in `app.json`, and its own dialog turns it off with "Don't ask again".
+ */
 const DELETE_PROMPT_ROW = row('promptDelete', 'promptDeleteDesc');
+const promptDeleteOn = (app: App): boolean => coreSetting(app, 'promptDelete') !== false;
 const SETUP_CHECK_ROW = row('setupCheck', 'setupCheckDesc');
+/**
+ * "Buba settings by default": every Buba key back to its default in one press, so the default look can be
+ * seen at once (word of the owner 27.10 17:28), and file deletion confirmed again, as the page shows it (word
+ * of the owner 27.10 18:46); keys of newer builds and Obsidian's other settings stay.
+ */
+const RESET_ROW = row('resetAll', 'resetAllDesc');
+/** "Appearance by default", the last row of "Appearance": only its keys (`LOOK_KEYS`, word of the owner 27.10 18:46). */
+const RESET_LOOK_ROW = row('resetLook', 'resetLookDesc');
 
 export class BubaSettingTab extends PluginSettingTab {
   readonly #plugin: Plugin;
@@ -231,7 +252,12 @@ export class BubaSettingTab extends PluginSettingTab {
             },
           },
           {
+            ...TREE_ARROWS_ROW(),
+            control: { type: 'toggle', key: 'treeArrows', defaultValue: DEFAULT_SETTINGS.treeArrows },
+          },
+          {
             ...TREE_ARROW_ROW(),
+            visible: () => this.#look().treeArrows,
             control: { type: 'toggle', key: 'treeArrowColor', defaultValue: DEFAULT_SETTINGS.treeArrowColor },
           },
           {
@@ -270,6 +296,8 @@ export class BubaSettingTab extends PluginSettingTab {
           },
           {
             ...FOLDER_COVER_ROW(),
+            // With files inside the cover is always in front (`coverInFront`).
+            visible: () => this.#look().folderTile === 'solid',
             control: {
               type: 'dropdown',
               key: 'folderCover',
@@ -279,11 +307,22 @@ export class BubaSettingTab extends PluginSettingTab {
           },
           {
             ...FOLDER_PLATE_ROW(),
+            visible: () => coverInFront(this.#look()),
             control: {
               type: 'dropdown',
               key: 'folderPlate',
               options: folderPlateOptions(),
               defaultValue: DEFAULT_SETTINGS.folderPlate,
+            },
+          },
+          {
+            ...FOLDER_AUTO_COVER_ROW(),
+            // With one picture the folder always shows one of its files.
+            visible: () => this.#look().folderTile !== 'one',
+            control: {
+              type: 'toggle',
+              key: 'folderAutoCover',
+              defaultValue: DEFAULT_SETTINGS.folderAutoCover,
             },
           },
           {
@@ -309,6 +348,7 @@ export class BubaSettingTab extends PluginSettingTab {
             ...MENU_OWN_ROW(),
             control: { type: 'toggle', key: 'menuOwnLabel', defaultValue: DEFAULT_SETTINGS.menuOwnLabel },
           },
+          { ...RESET_LOOK_ROW(), render: (setting: Setting) => this.#resetRow(setting, 'look') },
         ],
       },
       {
@@ -347,6 +387,11 @@ export class BubaSettingTab extends PluginSettingTab {
           { ...DELETE_PROMPT_ROW(), render: (setting: Setting) => this.#deletePromptRow(setting) },
           { ...SETUP_CHECK_ROW(), render: (setting: Setting) => this.#checkRow(setting) },
         ],
+      },
+      {
+        type: 'group',
+        heading: t('groupReset'),
+        items: [{ ...RESET_ROW(), render: (setting: Setting) => this.#resetRow(setting, 'all') }],
       },
     ];
   }
@@ -398,17 +443,47 @@ export class BubaSettingTab extends PluginSettingTab {
   #deletePromptRow(setting: Setting): void {
     let restoring = false;
     setting.addToggle((toggle) =>
-      toggle.setValue(coreSetting(this.app, 'promptDelete') === true).onChange(async (value) => {
+      toggle.setValue(promptDeleteOn(this.app)).onChange(async (value) => {
         if (restoring) return;
         if (!(await setCoreSetting(this.app, 'promptDelete', value))) {
           // The native setValue also calls onChange: restoring the UI must not write the setting.
           restoring = true;
-          toggle.setValue(coreSetting(this.app, 'promptDelete') === true);
+          toggle.setValue(promptDeleteOn(this.app));
           restoring = false;
           new Notice(t('saveFailedFiles'));
         }
       }),
     );
+  }
+
+  #resetRow(setting: Setting, scope: ResetScope): void {
+    setting.addButton((button) =>
+      button
+        .setButtonText(t('reset'))
+        .setDestructive()
+        .onClick(async () => {
+          if (!(await confirmReset(this.app, scope))) return;
+          const { schema: _schema, ...defaults } = DEFAULT_SETTINGS;
+          await saveSettings(this.#plugin, scope === 'look' ? lookDefaults() : defaults);
+          if (scope === 'all' && !promptDeleteOn(this.app))
+            await setCoreSetting(this.app, 'promptDelete', true);
+          applyTreeLook(settingsOf(this.#plugin));
+          this.#redraw();
+        }),
+    );
+  }
+
+  /**
+   * The page drawn again with the new values: `update()` rebuilds every control row from `plugin.settings`
+   * at once, except the row holding focus, so focus leaves the page first (Obsidian 1.14.5 app.js, read 27.10).
+   * A toggle's look is its component's state, not its checkbox, which Obsidian never writes: making switches
+   * follow their checkboxes turned "Grid keys" and "Reveal open folder" off on screen after a reset (word of the
+   * owner 27.10 18:46).
+   */
+  #redraw(): void {
+    const focused = this.containerEl.ownerDocument?.activeElement as HTMLElement | null | undefined;
+    if (focused && this.containerEl.contains(focused)) focused.blur();
+    this.update();
   }
 
   #checkRow(setting: Setting): void {

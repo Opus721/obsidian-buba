@@ -1,8 +1,10 @@
 // File panel in the right sidebar: its own view, like the built-in "File properties" and "Backlinks". It
 // shows what it is given (`showFiles`), and on open what the other views show (`initial`, follow.ts); it
-// draws the registry sections in order. A rename, deletion or edit of a shown file redraws it.
+// draws the registry sections in order. A rename, deletion or edit of a shown file redraws it; while a batch
+// of moves runs, at the batch's calm pace and once more at its end (src/platform/files/batch.ts).
 import { ItemView, type WorkspaceLeaf } from 'obsidian';
 import { t } from '../../core/i18n/dict/inspector.ts';
+import { BATCH_FRAME_MS, batchRunning, onBatchEnd } from '../../platform/files/batch.ts';
 import type { SectionRegistry } from './sections.ts';
 import './inspector.css';
 
@@ -13,6 +15,8 @@ export class InspectorView extends ItemView {
   readonly #initial: () => readonly string[];
   #paths: string[] = [];
   #cleanups: (() => void)[] = [];
+  /** A redraw waiting for the calm pace of a running batch. */
+  #paced = 0;
 
   constructor(leaf: WorkspaceLeaf, sections: SectionRegistry, initial: () => readonly string[] = () => []) {
     super(leaf);
@@ -38,19 +42,24 @@ export class InspectorView extends ItemView {
       this.app.vault.on('rename', (file, oldPath) => {
         if (!this.#paths.includes(oldPath)) return;
         this.#paths = this.#paths.map((path) => (path === oldPath ? file.path : path));
-        this.#render();
+        this.#changed();
       }),
     );
     this.registerEvent(
       this.app.vault.on('delete', (file) => {
         if (!this.#paths.includes(file.path)) return;
         this.#paths = this.#paths.filter((path) => path !== file.path);
-        this.#render();
+        this.#changed();
       }),
     );
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
-        if (this.#paths.includes(file.path)) this.#render();
+        if (this.#paths.includes(file.path)) this.#changed();
+      }),
+    );
+    this.register(
+      onBatchEnd(() => {
+        if (this.#paced) this.#render();
       }),
     );
     this.#paths = this.#existing(this.#initial());
@@ -58,6 +67,8 @@ export class InspectorView extends ItemView {
   }
 
   override async onClose(): Promise<void> {
+    window.clearTimeout(this.#paced);
+    this.#paced = 0;
     this.#clean();
   }
 
@@ -77,7 +88,19 @@ export class InspectorView extends ItemView {
     this.#render();
   }
 
+  /** A shown file changed: redraw now, or at the calm pace while a batch runs. */
+  #changed(): void {
+    if (!batchRunning()) {
+      this.#render();
+      return;
+    }
+    if (this.#paced) return;
+    this.#paced = window.setTimeout(() => this.#render(), BATCH_FRAME_MS);
+  }
+
   #render(): void {
+    window.clearTimeout(this.#paced);
+    this.#paced = 0;
     this.#clean();
     this.contentEl.empty();
     if (!this.#paths.length) {

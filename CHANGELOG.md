@@ -2,6 +2,24 @@
 
 What changed in each release of Buba, in plain words. The newest release is at the top.
 
+## 1.2.0
+
+Buba works more like a file manager: open in new tabs, copy and paste, undo, pick several folders or tags at once.
+
+- The middle mouse button opens a folder, tag, "All files", "Bookmarks" or a folder in the path in a new tab, as in Obsidian's file explorer; on a note, PDF or video it opens the file in a new tab, on a picture it opens the Buba viewer. Right-click a tile or a tree folder: "Open in new tab" comes first.
+- A Buba tab is titled by what it shows, the folder, tag, "All files" or "Bookmarks", in the tab and next to the back and forward arrows, and follows a rename of the open folder.
+- Ctrl+A selects every tile in the grid. Ctrl+C and Ctrl+V copy tiles into another folder. Right-click empty space in the grid for "New folder…", "New note", "New canvas", "New base" and "Paste".
+- Ctrl+Z undoes the last Buba action, whatever it was.
+- In the Buba tree, pick several folders or tags with Ctrl and Shift: give them one color or icon, move them, or delete them in one go. Delete on a tag or tag group asks first; "Delete group…" removes a group and takes its tags off files. Moving tags into an exclusive group asks which tag each file keeps.
+- Moving thousands of files is about three times faster, with progress and a "Stop" button.
+- "Bookmarks" in the Buba tree opens Obsidian's bookmarks as a grid. The tree sorts folders by created or modified time too, and its header has "New folder alongside", "New subfolder", "New tag", sort and collapse.
+- The path above a note, PDF or canvas opens that folder in the Buba grid.
+- Sort "by type" keeps files of one kind together by extension; "Then by" greys out the main key.
+- Folder tiles: a glass front over the files inside with a soft shadow, a slightly darker glass in the light theme, and no jitter when the front lowers on hover. A collapsed tree folder with subfolders shows a closed folder icon.
+- On a computer, right-click a .ttf, .otf or .ttc file and choose "Install font" to install it for your user, like Install in Windows Explorer; several fonts at once too.
+- PSD and PSB previews come from the full picture, notes without text show their name, and a canvas shows the file selected on it in the file panel.
+- On a phone, files opened from the grid get arrows to the next and previous file, and "Close" returns to the grid.
+
 ## 1.1.0
 
 Folder tiles in the grid show what is inside: a cover you choose, or the folder's own look.

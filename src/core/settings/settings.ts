@@ -16,14 +16,22 @@ export type TreeLines = (typeof TREE_LINES)[number];
 
 /** Opacity of colored lines, %: slider limits and step; other values in `data.json` mean the default. */
 /**
- * A folder tile in the grid (a back plate and a slanted front): with a few of its files lying inside, which
- * come out on hover, or without them. Kept as `peek` and `solid` so a saved choice keeps its meaning.
+ * A folder tile in the grid (a back plate and a glass front): one picture standing in it as the cover (the
+ * folder's own cover, else one of its files; word of the owner 27.10), a few of its files lying inside, which
+ * come out on hover, or none. Kept as `peek` and `solid` so a saved choice keeps its meaning.
  */
-export const FOLDER_TILES = ['peek', 'solid'] as const;
+export const FOLDER_TILES = ['one', 'peek', 'solid'] as const;
 export type FolderTile = (typeof FOLDER_TILES)[number];
 /** Where a folder tile shows its cover: on the back plate under the glass front, or on the front. */
 export const FOLDER_COVERS = ['back', 'front'] as const;
 export type FolderCover = (typeof FOLDER_COVERS)[number];
+/**
+ * Whether a folder tile shows its cover on the front: with files inside always, since a cover behind them
+ * looks cluttered (word of the owner 27.10); without files as "Folder cover" says; never with one picture,
+ * which is the cover itself.
+ */
+export const coverInFront = (settings: Pick<BubaSettings, 'folderTile' | 'folderCover'>): boolean =>
+  settings.folderTile === 'peek' || (settings.folderTile === 'solid' && settings.folderCover === 'front');
 /** The back plate of a folder tile with the cover in front: theme grey, or the cover's average color. */
 export const FOLDER_PLATES = ['grey', 'cover'] as const;
 export type FolderPlate = (typeof FOLDER_PLATES)[number];
@@ -55,6 +63,11 @@ export interface BubaSettings {
   treeLines: TreeLines;
   /** Opacity of colored lines, %, only for lines in the folder color. */
   treeLinesOpacity: number;
+  /**
+   * Arrows after the name, showing whether a folder or tag group is open; a press on the icon opens and
+   * closes it, the arrow is not pressed (src/platform/tree-press.ts).
+   */
+  treeArrows: boolean;
   /** Expand arrows in the folder color, for folders and tag groups with a color. */
   treeArrowColor: boolean;
   /** Folder name in the icon color. */
@@ -66,12 +79,17 @@ export interface BubaSettings {
    * tooltip; when off, a long name wraps onto more lines, as in Obsidian's file explorer.
    */
   treeNameOneLine: boolean;
-  /** Folder tile in the grid: without its files (default) or with a few of them inside. */
+  /** Folder tile in the grid: one picture as the cover (default), a few files inside, or none. */
   folderTile: FolderTile;
   /** Cover of a folder tile: on the back plate under glass (default) or on the front. */
   folderCover: FolderCover;
   /** Back plate behind a cover in front: the cover's average color (default) or theme grey. */
   folderPlate: FolderPlate;
+  /**
+   * A folder tile without its own cover shows the folder's newest picture; off (default), it is the empty
+   * folder in its color, and only a cover set by hand shows.
+   */
+  folderAutoCover: boolean;
   folderSelect: FolderSelect;
   /** File without a picture in the grid: a whole-tile silhouette (default), a square plate, a small silhouette. */
   fileTile: FileTile;
@@ -93,20 +111,25 @@ export const DEFAULT_SETTINGS: Readonly<BubaSettings> = Object.freeze({
   gridKeys: true,
   // Reveal is on by default. A saved `false` is kept: it cannot be told apart from a deliberate choice.
   autoRevealFolder: true,
-  // Tree look defaults; folder and tag names use the normal text color.
-  treeLines: 'off',
+  // Tree look defaults: nesting lines in the folder's color, folder and tag names take their color, the arrows
+  // after the name are on and grey (word of the owner 27.10, lines 18:46).
+  treeLines: 'color',
   treeLinesOpacity: 40,
-  treeArrowColor: true,
-  treeFolderNameColor: false,
-  treeTagNameColor: false,
+  treeArrows: true,
+  treeArrowColor: false,
+  treeFolderNameColor: true,
+  treeTagNameColor: true,
   // One line by default: the owner finds wrapped names tiring (25.10).
   treeNameOneLine: true,
-  // Files inside, out in a fan on hover; a closed folder is the other choice (word of the owner 26.10).
-  folderTile: 'peek',
+  // One picture stands in the folder as its cover, more on hover; a few files inside and a closed folder are
+  // the other choices (word of the owner 27.10 18:16).
+  folderTile: 'one',
   // The cover on the front; behind, under glass, is the other choice (word of the owner 26.10).
   folderCover: 'front',
   // The plate takes the cover's color; theme grey is the other choice (word of the owner 25.10).
   folderPlate: 'cover',
+  // Only a cover set by hand; the newest picture is the other choice (word of the owner 27.10).
+  folderAutoCover: false,
   // The tile area tinted; a line around the front and the framed area are the other choices (word of the owner 26.10).
   folderSelect: 'fill',
   // Programs differ by silhouette, like in a file manager (word of the owner 25.10).
@@ -116,6 +139,31 @@ export const DEFAULT_SETTINGS: Readonly<BubaSettings> = Object.freeze({
   // Day first and 24-hour time; a data.json without these keys gets the same.
   ...DEFAULT_DATE_LOOK,
 });
+
+/**
+ * Keys of "Appearance" (Settings → Buba): its own reset puts back only these, the rest of the page stays (word
+ * of the owner 27.10 18:46).
+ */
+export const LOOK_KEYS = [
+  'treeLines',
+  'treeLinesOpacity',
+  'treeArrows',
+  'treeArrowColor',
+  'treeFolderNameColor',
+  'treeTagNameColor',
+  'treeNameOneLine',
+  'folderTile',
+  'folderCover',
+  'folderPlate',
+  'folderAutoCover',
+  'folderSelect',
+  'fileTile',
+  'menuOwnLabel',
+] as const satisfies readonly (keyof BubaSettings)[];
+
+/** Defaults of the "Appearance" keys only. */
+export const lookDefaults = (): Partial<BubaSettings> =>
+  Object.fromEntries(LOOK_KEYS.map((key) => [key, DEFAULT_SETTINGS[key]]));
 
 const oneOf = <T extends string>(list: readonly T[], value: unknown, fallback: T): T =>
   (list as readonly unknown[]).includes(value) ? (value as T) : fallback;
@@ -152,6 +200,7 @@ export function normalizeSettings(raw: unknown): BubaSettings {
     treeLinesOpacity: isOpacity(data.treeLinesOpacity)
       ? data.treeLinesOpacity
       : DEFAULT_SETTINGS.treeLinesOpacity,
+    treeArrows: bool(data.treeArrows, DEFAULT_SETTINGS.treeArrows),
     treeArrowColor: bool(data.treeArrowColor, DEFAULT_SETTINGS.treeArrowColor),
     treeFolderNameColor: bool(data.treeFolderNameColor, DEFAULT_SETTINGS.treeFolderNameColor),
     treeTagNameColor: bool(data.treeTagNameColor, DEFAULT_SETTINGS.treeTagNameColor),
@@ -159,6 +208,7 @@ export function normalizeSettings(raw: unknown): BubaSettings {
     folderTile: oneOf(FOLDER_TILES, data.folderTile, DEFAULT_SETTINGS.folderTile),
     folderCover: oneOf(FOLDER_COVERS, data.folderCover, DEFAULT_SETTINGS.folderCover),
     folderPlate: oneOf(FOLDER_PLATES, data.folderPlate, DEFAULT_SETTINGS.folderPlate),
+    folderAutoCover: bool(data.folderAutoCover, DEFAULT_SETTINGS.folderAutoCover),
     folderSelect: oneOf(FOLDER_SELECTS, data.folderSelect, DEFAULT_SETTINGS.folderSelect),
     fileTile: oneOf(FILE_TILES, data.fileTile, DEFAULT_SETTINGS.fileTile),
     menuOwnLabel: bool(data.menuOwnLabel, DEFAULT_SETTINGS.menuOwnLabel),

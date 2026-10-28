@@ -1,0 +1,32 @@
+/* Progress notice of a large batch move (move-progress.ts). The bar uses Obsidian's colours: the track is
+   `--background-modifier-border`, the fill `--interactive-accent`. The "Stop" button is an ordinary Obsidian
+   button without border or shadow (owner's rule: buttons in Buba have no outline); the keyboard focus ring
+   is Obsidian's. */
+.buba-move-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  min-width: 240px;
+}
+
+.buba-move-progress-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--background-modifier-border);
+  overflow: hidden;
+}
+
+.buba-move-progress-fill {
+  width: var(--buba-move-done, 0);
+  height: 100%;
+  background: var(--interactive-accent);
+}
+
+body .buba-move-progress .buba-move-progress-stop {
+  align-self: flex-end;
+  border: 0;
+}
+
+body .buba-move-progress .buba-move-progress-stop:not(:focus-visible) {
+  box-shadow: none;
+}

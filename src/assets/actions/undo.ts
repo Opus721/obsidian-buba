@@ -1,5 +1,9 @@
-// Undo with Ctrl+Z and redo with Ctrl+Shift+Z / Ctrl+Y for Buba actions: moving tiles by dropping them on a
-// tree folder, renaming and deleting. As on Obsidian's canvas, the keys work in the grid body scope while it
+// Undo with Ctrl+Z and redo with Ctrl+Shift+Z / Ctrl+Y for Buba actions, as in a file manager: every Buba
+// action is a step, so Ctrl+Z takes the last one (src/core/actions/undo.ts). Moving tiles by dropping them on
+// a tree folder, renaming, deleting files and folders, and creating (pasted copies, "Make a copy", new
+// folders, notes, canvases and bases, added files) are undone; changes of tags, ratings, comments and looks
+// are stops: Ctrl+Z says it can't undo them and the next press goes on (`stopOnChanges`). A step older than
+// ten minutes, or undoing a create while Obsidian deletes permanently, asks first. As on Obsidian's canvas, the keys work in the grid body scope while it
 // has focus (`view.scope`, src/assets/grid/view.ts) and while the "Grid keys" setting is on; in a note, in a
 // field or without grid focus Ctrl+Z stays with Obsidian. The "Undo" and "Redo" commands have no default
 // keys: a command key swallows the key press even when the command refuses (`executeCommand` returns `true`
@@ -8,8 +12,22 @@
 // "Undo" in the canvas menu. Actions run one at a time, in a queue. Deletion follows Obsidian's setting: a
 // file comes back from Obsidian's trash but not from the system trash, and the notice says where it is;
 // redoing a batch delete goes only through the "Delete files" dialog. Names are shown as text only.
-import { ItemView, Keymap, Notice, Platform, type Events, type Menu, type Plugin } from 'obsidian';
 import {
+  ButtonComponent,
+  ItemView,
+  Keymap,
+  Modal,
+  Notice,
+  Platform,
+  type App,
+  type Events,
+  type Menu,
+  type Plugin,
+  type TAbstractFile,
+  type TFile,
+} from 'obsidian';
+import {
+  createdLines,
   nothingTo,
   keptIn,
   missedLine,
@@ -20,10 +38,12 @@ import {
   trashMissed,
   undoKey,
   type KeptStorage,
+  type CreateStep,
   type Step,
   type SystemTrash,
   type TrashOutcome,
   type TrashStep,
+  type UncreateStep,
   type UndoHistory,
 } from '../../core/actions/undo.ts';
 import { t } from '../../core/i18n/dict/actions.ts';
@@ -32,10 +52,14 @@ import { isTypingTarget } from '../../core/tags/keys.ts';
 import { coreSetting } from '../../platform/core-settings.ts';
 import { ownTitle } from '../../platform/menu-title.ts';
 import {
+  filesIn,
+  recordFixed,
+  recreateStep,
   redoStep,
   restoreStep,
   trashReady,
   trashSwept,
+  uncreateStep,
   undoHistory,
   undoStep,
   viaPrompt,
@@ -46,7 +70,7 @@ import { passportStorage } from '../../platform/passports.ts';
 import { settingsOf } from '../../platform/settings.ts';
 import type { BubaAssets } from '../api.ts';
 import { confirmLinkUpdates } from './links-setting.ts';
-import { confirmDeleteFiles, referencesOf } from './menu-items.ts';
+import { confirmDeleteFiles, confirmDeleteFolders, referencesOf } from './menu-items.ts';
 
 type Kind = 'undo' | 'redo';
 
@@ -57,6 +81,7 @@ export function registerUndo(plugin: Plugin, assets: BubaAssets): void {
   const { app } = plugin;
   const { workspace } = app;
   const history = undoHistory(app);
+  stopOnChanges(plugin);
 
   // Queue: each action takes its step after the previous one ends, so quick Ctrl+Z presses do not overlap.
   let queue: Promise<void> = Promise.resolve();
@@ -127,6 +152,53 @@ export function registerUndo(plugin: Plugin, assets: BubaAssets): void {
   );
 }
 
+/**
+ * Storage calls a user makes to change tags, ratings, comments, links and the looks of folders and tags. Buba
+ * cannot undo them yet, so each is a stop on the undo stack (`recordFixed`); vault events that carry records
+ * along go through other calls and are not stops.
+ */
+const FIXED = [
+  'addTags',
+  'removeTags',
+  'setRating',
+  'addComment',
+  'removeComment',
+  'setCommentDone',
+  'setLink',
+  'setTagColor',
+  'setGroupColor',
+  'setGroupExclusive',
+  'setTagDeclared',
+  'deleteTag',
+  'setFolderColor',
+  'setFolderIcon',
+  'setFolderCover',
+  'setFolderFrame',
+] as const;
+
+/** Wraps the storage's change calls so each records a stop; unloading the plugin puts the calls back. */
+function stopOnChanges(plugin: Plugin): void {
+  const storage = (plugin as Plugin & { storage?: Record<string, unknown> }).storage;
+  if (!storage) return;
+  const own = new Map<string, unknown>();
+  for (const name of FIXED) {
+    const call = storage[name];
+    if (typeof call !== 'function') continue;
+    own.set(name, Object.prototype.hasOwnProperty.call(storage, name) ? call : undefined);
+    storage[name] = (...args: unknown[]): unknown => {
+      const result: unknown = call.apply(storage, args);
+      recordFixed(plugin.app);
+      return result;
+    };
+  }
+  plugin.register(() => {
+    for (const [name, call] of own) {
+      if (call === undefined) delete storage[name];
+      else storage[name] = call;
+    }
+  });
+}
+
 function peek(history: UndoHistory, kind: Kind): Step | null {
   return kind === 'undo' ? history.peekUndo() : history.peekRedo();
 }
@@ -141,6 +213,22 @@ async function act(plugin: Plugin, history: UndoHistory, kind: Kind): Promise<vo
   const step = peek(history, kind);
   if (!step) {
     new Notice(nothingTo(kind));
+    return;
+  }
+  if (step.kind === 'fixed') {
+    // A stop is only on the undo stack: said once and taken off, so the next press goes on.
+    if (history.takeUndo(step)) new Notice(t('cannotUndo'), 10000);
+    return;
+  }
+  if (kind === 'undo' && !(await confirmUndo(app, step))) return;
+  if (step.kind === 'create' || step.kind === 'uncreate') {
+    try {
+      if (step.kind === 'create') await undoCreate(plugin, history, step);
+      else await redoCreate(plugin, history, step);
+    } catch (error) {
+      console.error(`Buba: ${kind} of creation failed`, error);
+      new Notice(kind === 'undo' ? t('undoFailed') : t('redoFailed'));
+    }
     return;
   }
   if (step.kind === 'trash') {
@@ -167,6 +255,85 @@ async function act(plugin: Plugin, history: UndoHistory, kind: Kind): Promise<vo
 }
 
 /**
+ * Asks before undoing a create step while Obsidian deletes permanently: it cannot be brought back. `true`
+ * means go on.
+ */
+function confirmUndo(app: App, step: Step): Promise<boolean> {
+  if (step.kind !== 'create' || coreSetting(app, 'trashOption') !== 'none') return Promise.resolve(true);
+  const lines = [t('foreverStepBody', { setting: t('deletedFilesSetting') })];
+  const heading = t('foreverStepTitle', { step: stepTitle(step) });
+  return new Promise((done) => new ConfirmUndoModal(app, heading, lines, done).open());
+}
+
+/**
+ * "Undo: …?": why it cannot be brought back, then "Don't undo" and "Undo", laid out as Obsidian's
+ * confirmation dialog (`mod-confirmation`, Cancel with `mod-cancel`). Close and Esc do not undo.
+ */
+class ConfirmUndoModal extends Modal {
+  readonly #title: string;
+  readonly #lines: readonly string[];
+  readonly #done: (go: boolean) => void;
+  #go = false;
+  #buttons: HTMLElement | null = null;
+
+  constructor(app: App, title: string, lines: readonly string[], done: (go: boolean) => void) {
+    super(app);
+    this.#title = title;
+    this.#lines = lines;
+    this.#done = done;
+    this.containerEl.addClass('mod-confirmation');
+  }
+
+  override onOpen(): void {
+    this.setTitle(this.#title);
+    for (const line of this.#lines) this.contentEl.createEl('p', { text: line });
+    const buttons = (this.#buttons = this.modalEl.createDiv({ cls: 'modal-button-container' }));
+    new ButtonComponent(buttons)
+      .setButtonText(t('dontUndo'))
+      .setClass('mod-cancel')
+      .onClick(() => this.close());
+    new ButtonComponent(buttons)
+      .setButtonText(t('undoButton'))
+      .setCta()
+      .onClick(() => {
+        this.#go = true;
+        this.close();
+      });
+  }
+
+  override onClose(): void {
+    this.contentEl.empty();
+    this.#buttons?.remove();
+    this.#buttons = null;
+    this.#done(this.#go);
+  }
+}
+
+/**
+ * Undoing a create: take the step → what is still as Buba made it goes to the trash by the Obsidian setting
+ * → that goes to redo → notice of what was undone and what stays and why.
+ */
+async function undoCreate(plugin: Plugin, history: UndoHistory, step: CreateStep): Promise<void> {
+  if (!history.takeUndo(step)) return;
+  const run = await uncreateStep(plugin.app, step, coreSetting(plugin.app, 'trashOption'));
+  history.undone(run.step);
+  show(outcomeHead('undo', step, run), null, createdLines(run.skipped, run.failed));
+}
+
+/** Redoing a create: bring back from Obsidian's trash what the undo put there, as when undoing a delete. */
+async function redoCreate(plugin: Plugin, history: UndoHistory, step: UncreateStep): Promise<void> {
+  if (!history.takeRedo(step)) return;
+  const run = await recreateStep(plugin.app, step, keptIn(storageOf(plugin)));
+  history.redone(run.step);
+  const missed = trashMissed(run);
+  show(
+    outcomeHead('redo', step, run),
+    missed ? missedLine('redo', missed) : null,
+    trashLines('undo', run, systemTrash()),
+  );
+}
+
+/**
  * Undoing a delete: take the step → restore from Obsidian's trash (`restoreStep`; tag records come from
  * plugin storage, so an untagged copy does not come back ahead of its tagged twin) → restored files go to
  * redo → notice of what came back, what did not and where it is. No links dialog: deletion does not change
@@ -190,8 +357,11 @@ async function redoTrash(plugin: Plugin, history: UndoHistory, step: TrashStep):
   const { app } = plugin;
   const { files, skipped } = trashReady(app, step);
   const passports = passportStorage(plugin);
-  const ours = files.length > 1 || referencesOf(files, passports).length > 0;
-  if (ours && !(await confirmDeleteFiles(app, files, passports))) return;
+  // A step deletes either files or folders; for folders the dialogs count the files inside.
+  const folders = files.filter((file) => 'children' in file);
+  const inside = folders.length ? (folders.flatMap(filesIn) as unknown as TFile[]) : (files as TFile[]);
+  const ours = files.length > 1 || referencesOf(inside, passports).length > 0;
+  if (ours && !(await confirmRedoDelete(app, files, folders, inside, passports))) return;
   if (!history.takeRedo(step)) return;
   const run = await trashSwept(
     app,
@@ -205,6 +375,19 @@ async function redoTrash(plugin: Plugin, history: UndoHistory, step: TrashStep):
   }
   history.redone({ kind: 'trash', ops: run.ops });
   trashNotice('redo', step, { done: run.ops.length, skipped, failed: run.failed, elsewhere: [], unseen: 0 });
+}
+
+/** The redo dialog: the folders dialog with their file count, or the files dialog. */
+function confirmRedoDelete(
+  app: App,
+  files: readonly TAbstractFile[],
+  folders: readonly TAbstractFile[],
+  inside: readonly TFile[],
+  passports: ReturnType<typeof passportStorage>,
+): Promise<boolean> {
+  return folders.length
+    ? confirmDeleteFolders(app, folders.length, inside, passports)
+    : confirmDeleteFiles(app, files as TFile[], passports);
 }
 
 /** Tag storage is the plugin's `storage` field, read as the tags module does; `undefined` until it opens. */

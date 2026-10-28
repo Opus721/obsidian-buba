@@ -8,12 +8,15 @@
 // Names are shown as text only. Group order: "Rename", "…with extension…" and "Make a copy" come through the
 // `buba:tile-menu` event before `file-menu`, in their own `buba-file` section right after tags, "Move file
 // to..." and "Bookmark..."; "Delete" comes through `file-menu` and `files-menu`, in the `danger` section,
-// last. All carry the "Buba" label on the right (src/platform/menu-title.ts).
+// last. All carry the "Buba" label on the right (src/platform/menu-title.ts). Several files get "Make copies"
+// in the same section and, on a computer, "Open in default app" when none of them has a view in Obsidian or
+// a preview in the viewer (Obsidian's own item is for one file only); programs never get it.
 import {
   ButtonComponent,
   ItemView,
   Modal,
   Notice,
+  Platform,
   Setting,
   TFile,
   type App,
@@ -26,6 +29,7 @@ import { availablePath } from '../../core/actions/import-names.ts';
 import { generationCount, referenceUse, type ReferenceUse } from '../../core/generation/delete.ts';
 import { t } from '../../core/i18n/dict/actions.ts';
 import { renameField, renameTarget } from '../../core/actions/rename.ts';
+import { opensInDefaultApp } from '../../core/viewer/default-app.ts';
 import { GENERATION_SECTION, SHOW_PANEL, USED_SECTION } from '../../core/inspector/events.ts';
 import type { FilePassports } from '../../core/storage/types.ts';
 import { isTypingTarget } from '../../core/tags/keys.ts';
@@ -33,7 +37,14 @@ import { settingsOf } from '../../platform/settings.ts';
 import { trashLine } from '../../core/actions/trash-text.ts';
 import { ownTitle } from '../../platform/menu-title.ts';
 import { coreSetting } from '../../platform/core-settings.ts';
-import { deleteRecorded, renameRecorded, viaPrompt, viaTrashFile } from '../../platform/files/undo.ts';
+import {
+  deleteRecorded,
+  recordCreated,
+  renameRecorded,
+  viaPrompt,
+  viaTrashFile,
+} from '../../platform/files/undo.ts';
+import { inBatch } from '../../platform/files/batch.ts';
 import { passportStorage } from '../../platform/passports.ts';
 import type { BubaAssets } from '../api.ts';
 import { MENU_SOURCE, TILE_MENU } from './file-menu.ts';
@@ -43,8 +54,11 @@ export function registerMenuItems(plugin: Plugin, assets: BubaAssets): void {
   plugin.registerEvent(
     (app.workspace as Events).on(TILE_MENU, (...data: unknown[]) => {
       const [menu, files] = data as [Menu, unknown];
-      const file = Array.isArray(files) && files.length === 1 ? (files[0] as unknown) : null;
+      if (!Array.isArray(files)) return;
+      const file = files.length === 1 ? (files[0] as unknown) : null;
       if (file instanceof TFile) addFileItems(app, menu, file);
+      const list = files.filter((each): each is TFile => each instanceof TFile);
+      if (files.length > 1 && list.length) addManyItems(app, menu, list);
     }),
   );
   plugin.registerEvent(
@@ -117,6 +131,32 @@ function addFileItems(app: App, menu: Menu, file: TFile): void {
   );
 }
 
+/** Most files opened at once in their apps, as Windows Explorer asks before opening more than 15. */
+export const OPEN_MANY_MAX = 15;
+
+/** Tile items for several files, before `files-menu`: copies and, on a computer, the default app. */
+function addManyItems(app: App, menu: Menu, files: readonly TFile[]): void {
+  menu.addItem((item) =>
+    item
+      .setTitle(ownTitle(t('makeCopies')))
+      .setIcon('copy')
+      .setSection('buba-file')
+      .onClick(() => void copyFiles(app, files)),
+  );
+  if (!Platform.isDesktopApp || !files.every((file) => opensInDefaultApp(file.extension, file.name))) return;
+  menu.addItem((item) =>
+    item
+      .setTitle(ownTitle(t('openInDefaultApp')))
+      .setIcon('arrow-up-right')
+      .setSection('buba-file')
+      .setDisabled(files.length > OPEN_MANY_MAX)
+      .onClick(() => {
+        // The public `openFile` of a file with no view keeps the tab and hands the file to its app.
+        for (const file of files) void app.workspace.getLeaf(false).openFile(file);
+      }),
+  );
+}
+
 /** "Delete" for a single tile file, via `file-menu`, in the last section. */
 function addDelete(plugin: Plugin, menu: Menu, file: TFile): void {
   menu.addItem((item) =>
@@ -171,14 +211,35 @@ function takenIn(file: TFile): (path: string) => boolean {
 }
 
 /** A copy next to the file under a free name "name 1.png", as Obsidian does; the original is untouched. */
-export async function copyFile(app: App, file: TFile): Promise<void> {
+async function copyNext(app: App, file: TFile): Promise<string | null> {
   const to = availablePath(file.parent?.path ?? '/', file.name, takenIn(file));
   try {
-    await app.vault.copy(file, to);
+    return (await app.vault.copy(file, to)).path;
   } catch (error) {
     console.error('Buba: copy not created', error);
     new Notice(t('copyFailed', { name: file.name }));
+    return null;
   }
+}
+
+/** "Make a copy" of one file, as one undo step. */
+export async function copyFile(app: App, file: TFile): Promise<void> {
+  await copyFiles(app, [file]);
+}
+
+/**
+ * A copy of each file next to it, one at a time, so names taken by earlier copies are seen; the copies are
+ * one undo step.
+ */
+export async function copyFiles(app: App, files: readonly TFile[]): Promise<void> {
+  const made: string[] = [];
+  await inBatch(files.length, async () => {
+    for (const file of files) {
+      const path = await copyNext(app, file);
+      if (path) made.push(path);
+    }
+  });
+  recordCreated(app, 'duplicate', '', made);
 }
 
 /** A field with the name without extension; Enter or "Rename" checks it in core; a refusal shows a notice. */
@@ -277,8 +338,39 @@ export function confirmDeleteFolder(
   uses: readonly ReferenceUse[],
   passports: PassportReader,
 ): Promise<boolean> {
-  return new Promise((done) => new ReferenceDeleteModal(app, files, uses, passports, done, name).open());
+  const heading = {
+    title: t('deleteFolderTitle', { name }),
+    lead: t('folderFilesCount', { count: files.length }),
+  };
+  return new Promise((done) => new ReferenceDeleteModal(app, files, uses, passports, done, heading).open());
 }
+
+/**
+ * Asks to delete `count` folders that hold `files`: the batch dialog titled with the folder count, or the
+ * reference dialog in that form when some files are references of generations. `true` on "Delete"; the
+ * caller deletes the folders.
+ */
+export function confirmDeleteFolders(
+  app: App,
+  count: number,
+  files: readonly TFile[],
+  passports?: PassportReader,
+): Promise<boolean> {
+  const uses = referencesOf(files, passports);
+  const heading = {
+    title: t('deleteFoldersTitle', { count }),
+    lead: t('foldersFilesCount', { count: files.length }),
+  };
+  return new Promise((done) =>
+    (uses.length && passports
+      ? new ReferenceDeleteModal(app, files, uses, passports, done, heading)
+      : new DeleteFilesModal(app, files, done, heading)
+    ).open(),
+  );
+}
+
+/** The dialog's own title and first line, instead of the file count: a folder delete. */
+type DeleteHeading = { title: string; lead: string };
 
 /**
  * Batch confirmation with the file count, like Obsidian's delete dialog: Cancel, then a red "Delete". It
@@ -293,6 +385,7 @@ export function confirmDeleteFolder(
 class DeleteFilesModal extends Modal {
   readonly #files: readonly TFile[];
   readonly #done: (confirmed: boolean) => void;
+  readonly #heading: DeleteHeading | null;
   #confirmed = false;
   #buttons: HTMLElement | null = null;
 
@@ -302,17 +395,19 @@ class DeleteFilesModal extends Modal {
     done: (confirmed: boolean) => void = (confirmed) => {
       if (confirmed) void trashFiles(app, files);
     },
+    heading: DeleteHeading | null = null,
   ) {
     super(app);
     this.#files = files;
     this.#done = done;
+    this.#heading = heading;
     this.containerEl.addClass('mod-confirmation');
   }
 
   override onOpen(): void {
     const n = this.#files.length;
-    this.setTitle(t('deleteFilesTitle'));
-    this.contentEl.createEl('p', { text: t('deleteFilesConfirm', { count: n }) });
+    this.setTitle(this.#heading?.title ?? t('deleteFilesTitle'));
+    this.contentEl.createEl('p', { text: this.#heading?.lead ?? t('deleteFilesConfirm', { count: n }) });
     // Where the files go follows Obsidian's "Deleted files" setting, read each time the dialog opens.
     const { text, warning } = trashLine(coreSetting(this.app, 'trashOption'));
     this.contentEl.createEl('p', { text }).toggleClass('mod-warning', warning);
@@ -350,15 +445,15 @@ const LISTED = 5;
  * section. A batch: the file count, how many are references in how many generations, up to five reference
  * names (a name shows its "Used in generations"). Then what happens to those generations and where the
  * files go. "Delete" trashes them with `trashFile` and one undo step, as the batch dialog does; without
- * `done` it deletes them itself. With `folder` it asks about deleting that folder (the Buba tree's
- * "Delete"): the batch form with the folder name in the title and its file count.
+ * `done` it deletes them itself. With `heading` it asks about deleting folders (the Buba tree's "Delete"):
+ * the batch form with the folder's name or the folder count in the title and their file count.
  */
 class ReferenceDeleteModal extends Modal {
   readonly #files: readonly TFile[];
   readonly #uses: readonly ReferenceUse[];
   readonly #passports: PassportReader;
   readonly #done: (confirmed: boolean) => void;
-  readonly #folder: string | null;
+  readonly #heading: DeleteHeading | null;
   #confirmed = false;
   #buttons: HTMLElement | null = null;
 
@@ -370,21 +465,21 @@ class ReferenceDeleteModal extends Modal {
     done: (confirmed: boolean) => void = (confirmed) => {
       if (confirmed) void trashFiles(app, files);
     },
-    folder: string | null = null,
+    heading: DeleteHeading | null = null,
   ) {
     super(app);
     this.#files = files;
     this.#uses = uses;
     this.#passports = passports;
     this.#done = done;
-    this.#folder = folder;
+    this.#heading = heading;
     this.containerEl.addClass('mod-confirmation');
   }
 
   override onOpen(): void {
     const { contentEl } = this;
     const [only] = this.#files;
-    const one = this.#files.length === 1 && only && this.#folder === null ? only : null;
+    const one = this.#files.length === 1 && only && this.#heading === null ? only : null;
     const count = generationCount(this.#uses);
     if (one) {
       this.setTitle(t('deleteRefTitle', { name: one.name }));
@@ -397,9 +492,9 @@ class ReferenceDeleteModal extends Modal {
           return { text: model ? `${name} · ${model}` : name, path, section: GENERATION_SECTION };
         }),
       );
-    } else if (this.#folder !== null) {
-      this.setTitle(t('deleteFolderTitle', { name: this.#folder }));
-      contentEl.createEl('p', { text: t('folderFilesCount', { count: this.#files.length }) });
+    } else if (this.#heading !== null) {
+      this.setTitle(this.#heading.title);
+      contentEl.createEl('p', { text: this.#heading.lead });
     } else {
       this.setTitle(t('deleteFilesTitle'));
       contentEl.createEl('p', { text: t('deleteFilesConfirm', { count: this.#files.length }) });

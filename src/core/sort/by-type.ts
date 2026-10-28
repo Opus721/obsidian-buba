@@ -1,8 +1,9 @@
 // "By type" sort: files of one format family (src/core/format/family.ts) stay together, like
 // "Type" in Windows Explorer and Finder. Family order: application files → video → images →
 // audio → documents → other; inside a group, a chosen list of applications first in a fixed
-// order, then the rest in family-table order; for images, regular ones first, then RAW. Only
-// this order is ours: Obsidian has no type order table. No `obsidian` import.
+// order, then the rest in family-table order; for images, regular ones first, then RAW. Inside a family
+// files go by extension, as "Type" in Explorer keeps MD and TXT apart. Only this order is ours: Obsidian
+// has no type order table. No `obsidian` import.
 import { formatFamily, type FormatFamilyId } from '../format/family.ts';
 
 /** Families in "by type" order, ascending: every `FormatFamilyId` exactly once. */
@@ -52,10 +53,22 @@ export function typeRank(ext: string): number {
   return RANK.get(formatFamily(ext).family) ?? TYPE_ORDER.length;
 }
 
+/** Spellings of one format, so JPEG files stay with JPG ones. */
+const SAME_EXT: Readonly<Record<string, string>> = { jpeg: 'jpg', tif: 'tiff', htm: 'html', yml: 'yaml' };
+
+const extKey = (ext: string): string => {
+  const lower = ext.toLowerCase();
+  return SAME_EXT[lower] ?? lower;
+};
+
 /**
- * Compares by type, ascending; files of one family (JPG and PNG are both images) are equal, so the second
- * sort level and then the name decide their order.
+ * Compares by type, ascending: by family, then by extension inside it (MD before TXT); files with one
+ * extension are equal, so the second sort level and then the name decide their order.
  */
 export function compareByType(a: { readonly ext: string }, b: { readonly ext: string }): number {
-  return typeRank(a.ext) - typeRank(b.ext);
+  const byFamily = typeRank(a.ext) - typeRank(b.ext);
+  if (byFamily !== 0) return byFamily;
+  const left = extKey(a.ext);
+  const right = extKey(b.ext);
+  return left < right ? -1 : left > right ? 1 : 0;
 }

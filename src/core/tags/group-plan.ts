@@ -134,6 +134,58 @@ export function moveConflicts(
 }
 
 /**
+ * Tags of an exclusive group that files would have together after tags move into it: a file shows one of
+ * them, and the user picks which (word of the owner 27.10). `tags` are the names after the move, by name;
+ * `kept` is the one that would show without a choice, the moved tag written last; `paths` are the files.
+ */
+export interface MoveChoice {
+  tags: string[];
+  kept: string;
+  paths: string[];
+}
+
+/**
+ * Choices for moving `moves` (old and new name, in the order they are written) into group `group`: one per
+ * set of tags that files would have together, most files first, then by name. Only files that exist count. Nothing without
+ * a group or without the flag.
+ */
+export function moveChoices(
+  storage: Pick<BubaStorage, 'filesWithTag' | 'get' | 'groupSettings'>,
+  moves: readonly { from: string; to: string }[],
+  group: string | null,
+  exists: (path: string) => boolean,
+): MoveChoice[] {
+  const key = group === null ? null : tagKey(group);
+  if (key === null || !storage.groupSettings(key).exclusive) return [];
+  const renamed = new Map(moves.map(({ from, to }) => [tagKey(from), to]));
+  const order = new Map(moves.map(({ to }, at) => [tagKey(to), at]));
+  const paths = new Set(moves.flatMap(({ from }) => storage.filesWithTag(from)).filter(exists));
+  const choices = new Map<string, MoveChoice>();
+  for (const path of paths) {
+    const after = new Map<string, string>();
+    for (const tag of storage.get(path).tags) {
+      const name = renamed.get(tagKey(tag)) ?? tag;
+      const nameKey = tagKey(name);
+      if (nameKey !== null && groupKey(name) === key && !after.has(nameKey)) after.set(nameKey, name);
+    }
+    if (after.size < 2) continue;
+    const tags = [...after.values()].sort((a, b) => collator.compare(a, b));
+    const id = tags.map((tag) => tagKey(tag)).join('\n');
+    const known = choices.get(id);
+    if (known) {
+      known.paths.push(path);
+      continue;
+    }
+    const last = (tag: string) => order.get(tagKey(tag)) ?? -1;
+    const kept = tags.reduce((best, tag) => (last(tag) > last(best) ? tag : best));
+    choices.set(id, { tags, kept, paths: [path] });
+  }
+  return [...choices.values()].sort(
+    (a, b) => b.paths.length - a.paths.length || collator.compare(a.tags.join('\n'), b.tags.join('\n')),
+  );
+}
+
+/**
  * Files that would lose a tag when group `from` merges into exclusive group `to`: after the move a file would
  * have more than one distinct tag of `to` (its own plus the moved "<to>/<short name>"), and each tagging in
  * such a group removes siblings (`renameGroup` → `renameTag` → `addTags`). Nothing if `to` has no flag.

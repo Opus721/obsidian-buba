@@ -9,7 +9,13 @@ import { setIcon } from 'obsidian';
 
 export const BUBA_ROW_TYPE = 'application/x-buba-tree-row';
 
-export type TreeRowDrag = { kind: 'folder'; path: string } | { kind: 'tag'; tag: string };
+/**
+ * A folder drag carries the row's `path` and all dragged folders, `paths`; a tag drag the row's `tag` and all
+ * dragged tags, `tags`: the row alone or the rows picked with Ctrl and Shift.
+ */
+export type TreeRowDrag =
+  | { kind: 'folder'; path: string; paths: readonly string[] }
+  | { kind: 'tag'; tag: string; tags: readonly string[] };
 
 let current: TreeRowDrag | null = null;
 

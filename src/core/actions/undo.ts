@@ -1,11 +1,17 @@
 // Undo and redo of Buba's own actions. Core rule, no `obsidian` import. The stack lives in memory, like the
 // Obsidian canvas history (`history = new k7(100)`, app.js 1.14.4): 100 steps, a new action drops the redo
-// stack. A step is one user action: moving tiles by dropping them on a Buba tree folder, renaming a file, or
-// deleting. Before undo and redo every move is checked against the disk: the same file is in place (size and
-// modification time, or for notes and canvases the same file object) and the destination is free; someone
-// else's file is never touched. Deletion follows the Obsidian setting: a file comes back from the Obsidian
-// trash (`.trash`), not from the system trash or after "permanently delete", and the notice says where it is.
-// The moves and restores themselves are in src/platform/files/undo.ts.
+// stack. As in a file manager (Explorer, Finder, Eagle), every Buba action is a step, so Ctrl+Z always takes
+// the last one: moving tiles by dropping them on a Buba tree folder, renaming, deleting files or folders,
+// creating (pasted copies, "Make a copy", a new folder, note, canvas or base, added files). Changes of tags,
+// ratings, comments and looks are steps too, but ones that cannot be undone (`FixedStep`): Ctrl+Z says so and
+// stops there instead of quietly undoing an older action; the next press goes on. As in a file manager, the
+// history lasts while Obsidian runs and an older step is undone without asking (word of the owner 27.10).
+// Before undo and redo every move is checked against
+// the disk: the same file is in place (size and modification time, or for notes and canvases the same file
+// object) and the destination is free; someone else's file is never touched. Created files go to the trash
+// only while they are as Buba made them (`checkCreated`). Deletion follows the Obsidian setting: a file comes
+// back from the Obsidian trash (`.trash`), not from the system trash or after "permanently delete", and the
+// notice says where it is. The moves and restores themselves are in src/platform/files/undo.ts.
 import { t } from '../i18n/dict/actions.ts';
 import type { BubaStorage, FileLinks } from '../storage/types.ts';
 import type { MoveOp } from './journal.ts';
@@ -32,6 +38,8 @@ export type MovesStep = MoveStep | RenameStep;
 
 /** Size and modification time: how Buba recognizes its deleted file in the Obsidian trash and old place. */
 export type FilePrint = { size: number; mtime: number };
+/** What a deleted item was: a file's print, or `folder` (a folder is recognized by its name and kind). */
+export type TrashPrint = FilePrint | 'folder';
 /**
  * Where a deleted file went, from Obsidian's "Files and links > Deleted files" setting (`trashOption`) and a
  * check of `.trash`: `local` is the Obsidian trash; `system` the system trash; `missing` means the setting
@@ -43,10 +51,33 @@ export type TrashWhere = 'local' | 'system' | 'missing' | 'forever' | 'unknown';
  * A deleted file of a step, as a move into the trash: `from` is the old path, `to` the path in the Obsidian
  * trash (`.trash/frame 2.png`; empty if the file is not there), plus its print and where it went.
  */
-export type TrashOp = MoveOp & { print: FilePrint; where: TrashWhere };
-/** Deleting one file with the Obsidian dialog or a batch with the "Delete files" dialog. */
+export type TrashOp = MoveOp & { print: TrashPrint; where: TrashWhere };
+/** Deleting files or folders: one with the Obsidian dialog or a batch with the "Delete files" dialog. */
 export type TrashStep = { kind: 'trash'; ops: TrashOp[] };
-export type Step = MovesStep | TrashStep;
+
+/**
+ * What a create step made: pasted copies (`copy`), "Make a copy" (`duplicate`), a new folder (`folder`), a
+ * new note, canvas or base (`file`), files added from the computer (`import`).
+ */
+export type CreateWhat = 'copy' | 'duplicate' | 'folder' | 'file' | 'import';
+/**
+ * One item of a created thing as Buba made it: its path, the vault object itself (a file or folder object
+ * lives while the item stays at its path, a new item at the path is another object) and a file's size
+ * (`null` for a folder).
+ */
+export type Made = { path: string; item: object; size: number | null };
+/** A created file or folder: its path and its whole tree as made, the item itself first. */
+export type CreateOp = { path: string; tree: readonly Made[] };
+/** Creating files or folders in `place` (the folder's name as shown, the vault name for the root). */
+export type CreateStep = { kind: 'create'; what: CreateWhat; place: string; ops: CreateOp[] };
+/** An undone create step on the redo stack: what went to the trash, to bring back on redo. */
+export type UncreateStep = { kind: 'uncreate'; what: CreateWhat; place: string; ops: TrashOp[] };
+/**
+ * A change Buba cannot undo yet (tags, ratings, comments, looks of folders and tags): a stop on the undo
+ * stack, so Ctrl+Z does not quietly undo an older action instead.
+ */
+export type FixedStep = { kind: 'fixed'; ops: readonly never[] };
+export type Step = MovesStep | TrashStep | CreateStep | UncreateStep | FixedStep;
 
 /** Why undo or redo skips a move: `missing` (no file), `changed` (file changed), `taken` (name taken). */
 export type CheckReason = 'missing' | 'changed' | 'taken';
@@ -121,14 +152,17 @@ export function reverseMoves(ops: readonly StepOp[], disk: Disk): Checked {
 /**
  * Undo and redo stack. The step to undo is taken from the top (`takeUndo`), and only what was actually undone
  * goes to redo (`undone`); redo works the other way round. A new action (`push`) drops the redo stack; a step
- * without moves is not recorded; steps beyond 100 are dropped.
+ * without moves is not recorded, except a stop (`FixedStep`), and stops in a row are one; steps beyond 100
+ * are dropped.
  */
 export class UndoHistory {
   readonly #undo: Step[] = [];
   readonly #redo: Step[] = [];
 
   push(step: Step): void {
-    if (!step.ops.length) return;
+    if (step.kind === 'fixed') {
+      if (this.#undo.at(-1)?.kind === 'fixed') this.#undo.pop();
+    } else if (!step.ops.length) return;
     keep(this.#undo, step);
     this.#redo.length = 0;
   }
@@ -175,15 +209,70 @@ function take(stack: Step[], step: Step): boolean {
 const nameOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1);
 const parentOf = (path: string): string => path.slice(0, Math.max(0, path.lastIndexOf('/')));
 
+/** Why undoing a create skips an item: `missing` (gone), `changed` (changed since Buba made it). */
+export type CreatedUnchecked = { op: CreateOp; why: 'missing' | 'changed' };
+
+/**
+ * Which created items can go to the trash now: the same objects at the same paths, file sizes as made, and
+ * nothing added inside a folder; otherwise "missing" (nothing at the path) or "changed". `treeAt` gives the
+ * tree at a path now, the item first, or `null`.
+ */
+export function checkCreated(
+  ops: readonly CreateOp[],
+  treeAt: (path: string) => readonly Made[] | null,
+): { ops: CreateOp[]; skipped: CreatedUnchecked[] } {
+  const checked: { ops: CreateOp[]; skipped: CreatedUnchecked[] } = { ops: [], skipped: [] };
+  for (const op of ops) {
+    const now = treeAt(op.path);
+    if (!now) checked.skipped.push({ op, why: 'missing' });
+    else if (!sameTree(now, op.tree)) checked.skipped.push({ op, why: 'changed' });
+    else checked.ops.push(op);
+  }
+  return checked;
+}
+
+function sameTree(now: readonly Made[], then: readonly Made[]): boolean {
+  if (now.length !== then.length) return false;
+  const made = new Map(then.map((each) => [each.path, each]));
+  return now.every(({ path, item, size }) => {
+    const was = made.get(path);
+    return was !== undefined && was.item === item && was.size === size;
+  });
+}
+
+/** Undo lines of a create step: "path — why", names as text only. */
+export function createdLines(
+  skipped: readonly CreatedUnchecked[],
+  failed: readonly { from: string; error: string }[],
+): string[] {
+  return [
+    ...skipped.map(({ op, why }) =>
+      t('pathReason', { path: op.path, reason: t(why === 'missing' ? 'createdMissing' : 'createdChanged') }),
+    ),
+    ...failed.map(({ from, error }) => t('pathReason', { path: from, reason: error })),
+  ];
+}
+
 /**
  * The step in words, for the notice and the menu item: "moving 3 files to "Done"", "renaming "a.png" to
  * "b.png"", "deleting "frame.png"", "deleting 3 files".
  */
 export function stepTitle(step: Step): string {
+  if (step.kind === 'fixed') return t('stepFixed');
+  if (step.kind === 'create' || step.kind === 'uncreate') {
+    const paths =
+      step.kind === 'create' ? step.ops.map(({ path }) => path) : step.ops.map(({ from }) => from);
+    const [only] = paths;
+    const vars = { count: paths.length, place: step.place };
+    if (paths.length === 1 && only)
+      return t(CREATE_ONE[step.what], { name: nameOf(only), place: step.place });
+    return t(CREATE_MANY[step.what], vars);
+  }
   if (step.kind === 'trash') {
     const [op] = step.ops;
-    return step.ops.length === 1 && op
-      ? t('stepTrashOne', { name: nameOf(op.from) })
+    if (step.ops.length === 1 && op) return t('stepTrashOne', { name: nameOf(op.from) });
+    return step.ops.every(({ print }) => print === 'folder')
+      ? t('stepTrashFolders', { count: step.ops.length })
       : t('stepTrashMany', { count: step.ops.length });
   }
   if (step.kind === 'rename') {
@@ -194,6 +283,22 @@ export function stepTitle(step: Step): string {
   const count = step.ops.length;
   return folder ? t('stepMoveTo', { count, folder }) : t('stepMoveRoot', { count });
 }
+
+/** Create step titles by what was made: one item by name, more by count. */
+const CREATE_ONE = {
+  copy: 'stepPasteOne',
+  duplicate: 'stepDuplicateOne',
+  folder: 'stepNewFolder',
+  file: 'stepNewFile',
+  import: 'stepAddOne',
+} as const satisfies Record<CreateWhat, string>;
+const CREATE_MANY = {
+  copy: 'stepPasteMany',
+  duplicate: 'stepDuplicateMany',
+  folder: 'stepNewFolders',
+  file: 'stepNewFiles',
+  import: 'stepAddMany',
+} as const satisfies Record<CreateWhat, string>;
 
 /** Hint when there is nothing to undo or redo: otherwise Ctrl+Z after a native explorer move looks broken. */
 export function nothingTo(kind: 'undo' | 'redo'): string {
@@ -270,7 +375,9 @@ export function trashOrigins(path: string): { name: string; n: number }[] {
   return numbered && n >= 2 ? [own, { name: `${numbered[1]}${ext}`.toLowerCase(), n }] : [own];
 }
 
-const sameSizeAndDate = (a: FilePrint, b: FilePrint): boolean => a.size === b.size && a.mtime === b.mtime;
+/** Same file by size and time, or both folders. */
+const sameSizeAndDate = (a: TrashPrint, b: TrashPrint): boolean =>
+  a === 'folder' || b === 'folder' ? a === b : a.size === b.size && a.mtime === b.mtime;
 
 /**
  * Fallback check: which new `.trash` entry belongs to which deleted file when the expected path did not
@@ -280,10 +387,10 @@ const sameSizeAndDate = (a: FilePrint, b: FilePrint): boolean => a.size === b.si
  * `trashLocal` numbers them: the earlier deleted file gets the lower number. `null` if nothing matches.
  */
 export function matchTrash(
-  gone: readonly { name: string; print: FilePrint }[],
-  found: ReadonlyMap<string, FilePrint>,
+  gone: readonly { name: string; print: TrashPrint }[],
+  found: ReadonlyMap<string, TrashPrint>,
 ): (string | null)[] {
-  const byName = new Map<string, { path: string; n: number; print: FilePrint }[]>();
+  const byName = new Map<string, { path: string; n: number; print: TrashPrint }[]>();
   for (const [path, print] of found) {
     for (const { name, n } of trashOrigins(path)) {
       const list = byName.get(name);
@@ -325,7 +432,7 @@ export type TrashUnchecked = { op: TrashOp; why: CheckReason };
 export function checkRestores(
   ops: readonly TrashOp[],
   disk: Disk,
-  trashed: (path: string) => FilePrint | null,
+  trashed: (path: string) => TrashPrint | null,
 ): { ops: LocalTrashOp[]; skipped: TrashUnchecked[]; elsewhere: TrashOp[] } {
   const claimed = new Set<string>();
   const checked: { ops: LocalTrashOp[]; skipped: TrashUnchecked[]; elsewhere: TrashOp[] } = {
@@ -377,7 +484,7 @@ export const keptIn =
 
 /** Twins for tag storage: same name, size and time, which is how move pairing matches a pair. */
 const twinKey = ({ from, print }: TrashOp): string =>
-  `${print.size}:${print.mtime}:${from.slice(from.lastIndexOf('/') + 1)}`;
+  `${print === 'folder' ? print : `${print.size}:${print.mtime}`}:${from.slice(from.lastIndexOf('/') + 1)}`;
 
 /**
  * Order of restoring from the Obsidian trash. Storage pairs the "gone" event of a file with records and the

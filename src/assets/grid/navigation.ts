@@ -44,3 +44,19 @@ export function crumbs(folder: Folder, vaultName: string): Crumb[] {
   }
   return parts;
 }
+
+/**
+ * The folder a breadcrumb of an Obsidian file view opens: crumb `index` of `count` above the file at `path`.
+ * Obsidian draws one crumb per parent folder, from the top; an extra crumb in front is taken as the vault
+ * root. A count that matches neither gives `undefined`, and the click is left to Obsidian.
+ */
+export function crumbFolder(path: string, index: number, count: number): string | undefined {
+  const parts = path
+    .split('/')
+    .slice(0, -1)
+    .filter((part) => part !== '');
+  const shift = count - parts.length;
+  if ((shift !== 0 && shift !== 1) || index < 0 || index >= count) return undefined;
+  if (index < shift) return '/';
+  return parts.slice(0, index - shift + 1).join('/');
+}

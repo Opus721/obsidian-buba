@@ -1,6 +1,6 @@
 // Grid tile selection on the model in src/core/selection/selection.ts: a click selects one tile, Ctrl (Cmd on
 // macOS) adds or removes, Shift selects the run from the anchor, a press on empty space plus movement draws a
-// marquee. Each grid view has its own selection: the view gets `selectedPaths()`, and every change fires
+// marquee, Ctrl+A (Cmd+A) selects every tile while the grid has focus. Each grid view has its own selection: the view gets `selectedPaths()`, and every change fires
 // `buba:selection-change` (view, paths in grid order). Just added files become the selection, and the first
 // of them in grid order is scrolled into view (`buba:added-select`). The marquee works on the rectangles of the
 // whole layout (`tileRects()`), not on page elements: the grid draws only visible tiles. Handlers are
@@ -16,10 +16,14 @@ import {
   rename,
   restore,
   select,
+  selectAll,
   toggle,
   type Rect,
   type Selection,
 } from '../../core/selection/selection.ts';
+import { isTypingTarget } from '../../core/tags/keys.ts';
+import { BATCH_FRAME_MS, batchRunning } from '../../platform/files/batch.ts';
+import { settingsOf } from '../../platform/settings.ts';
 import type { BubaAssets, BubaGridView } from '../api.ts';
 import {
   DRAG_PX,
@@ -107,6 +111,8 @@ export function registerSelection(plugin: Plugin, assets: BubaAssets): void {
   };
   workspace.onLayoutReady(install);
   plugin.registerEvent(workspace.on('layout-change', install));
+  workspace.onLayoutReady(() => wireSelectAll(plugin, assets));
+  plugin.registerEvent(workspace.on('layout-change', () => wireSelectAll(plugin, assets)));
 
   onGridEvent(plugin, assets, 'click', (evt, { view, path }) => {
     if (path === null || evt.button !== 0) return;
@@ -165,6 +171,41 @@ export function registerSelection(plugin: Plugin, assets: BubaAssets): void {
       }
     }),
   );
+}
+
+/** Selects every tile of the view, folders included, as Ctrl+A in Explorer; the Shift anchor is cleared. */
+export function selectAllTiles(view: GridLeafView): void {
+  change(view, stateOf(view), selectAll(view.pathsInOrder()));
+}
+
+const selectAllWired = new WeakSet<BubaGridView>();
+
+/**
+ * Ctrl+A (Cmd+A) on the `scope` of every grid view, once per view, like Delete in src/assets/actions/menu-items.ts.
+ * By `code`, so it works with a Russian layout too; in a text field, or with grid keys off on Buba's settings
+ * page, the key goes on to Obsidian. The command "Select all tiles" (commands.ts) takes a key of the user's own.
+ */
+function wireSelectAll(plugin: Plugin, assets: BubaAssets): void {
+  for (const view of gridViews(assets)) {
+    const { scope } = view;
+    if (!scope || selectAllWired.has(view)) continue;
+    selectAllWired.add(view);
+    const handler = scope.register(null, null, (evt) => {
+      if (
+        evt.code !== 'KeyA' ||
+        !Keymap.isModifier(evt, 'Mod') ||
+        evt.shiftKey ||
+        evt.altKey ||
+        evt.isComposing ||
+        !settingsOf(plugin).gridKeys ||
+        isTypingTarget(evt.target as Element | null)
+      )
+        return undefined;
+      if (!evt.repeat) selectAllTiles(view);
+      return false;
+    });
+    view.register(() => scope.unregister(handler));
+  }
 }
 
 /**
@@ -300,12 +341,17 @@ function announce(view: GridLeafView, state: ViewSelection): void {
   view.app.workspace.trigger(SELECTION_CHANGE, view, inOrder(state.sel, view.pathsInOrder()));
 }
 
-/** Reconciliation in the next frame, one per frame. */
+/**
+ * Reconciliation in the next frame, one per frame; while a batch of moves runs, one per `BATCH_FRAME_MS`
+ * (src/platform/files/batch.ts): each reconciliation announces the selection, and the file panel redraws.
+ */
 function schedule(view: GridLeafView, state: ViewSelection): void {
-  state.frame ||= window.requestAnimationFrame(() => {
+  if (state.frame) return;
+  const run = (): void => {
     state.frame = 0;
     reconcile(view, state);
-  });
+  };
+  state.frame = batchRunning() ? window.setTimeout(run, BATCH_FRAME_MS) : window.requestAnimationFrame(run);
 }
 
 /**

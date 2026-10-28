@@ -5,6 +5,7 @@
 // otherwise the common one (memory in place-views.ts).
 import {
   ItemView,
+  Keymap,
   Platform,
   Scope,
   TFolder,
@@ -35,11 +36,13 @@ import {
 } from '../../core/filter/file-types.ts';
 import { lookOf, sameLook } from '../../core/layout/place-views.ts';
 import type { CoverFrame, FolderLooks } from '../../core/storage/types.ts';
+import { coverInFront, type BubaSettings } from '../../core/settings/settings.ts';
 import { gridItems, keepsPlace, type GridItem } from '../../core/sort/grid-items.ts';
+import { BATCH_FRAME_MS, batchRunning, onBatchEnd } from '../../platform/files/batch.ts';
 import { pathsVersionOf, type FileIndex, type FileRecord } from '../../platform/files/file-index.ts';
 import { vaultFileIndex } from '../../platform/files/vault-index.ts';
 import { onSettingsChange, settingsOf } from '../../platform/settings.ts';
-import type { BubaAssets, BubaGridView, GridSourceProvider } from '../api.ts';
+import type { BubaAssets, BubaGridView, FolderSource, GridSourceProvider } from '../api.ts';
 import { seriesTile } from './click-series.ts';
 import { FolderFaces, isCoverFile } from './folder-faces.ts';
 import { isNavigationStep } from './navigation.ts';
@@ -175,11 +178,15 @@ export class GridView extends ItemView implements BubaGridView {
   /** What is shown, so a new source opens from the top while the same one stays in place. */
   #shownSource = '';
   #frame = 0;
+  /** A redraw waiting for the calm pace of a running batch (`#schedule`). */
+  #paced = 0;
   /**
    * History steps run one at a time: Obsidian silently drops a second `setViewState` on a leaf while the
    * first runs.
    */
   #steps: Promise<void> = Promise.resolve();
+  /** A `setViewState` of the same state, only for Obsidian to redraw the tab title (`#retab`). */
+  #retabbing = false;
   /**
    * "File type": checked types, empty means all. Remembered per tab (`typesByLeaf`): a new view on the same
    * leaf takes the choice from there; changing place clears it unless keeping is on; a new tab has no filter.
@@ -220,7 +227,15 @@ export class GridView extends ItemView implements BubaGridView {
     return GRID_VIEW_TYPE;
   }
 
+  /**
+   * The tab's title is what it shows, as a note's tab carries the note's name (word of the owner 28.10 17:25):
+   * the folder, "All files", the tag, "Bookmarks", by the same title as the path above the grid. Obsidian
+   * redraws the tab header after `setViewState`, and every place change goes through it (`setState` below).
+   */
   override getDisplayText(): string {
+    const { source, provider } = this.#source();
+    const title = provider?.title(source);
+    if (title) return title;
     return 'Buba';
   }
 
@@ -237,7 +252,13 @@ export class GridView extends ItemView implements BubaGridView {
     // Folder tiles look like their tree rows and show a cover or the first picture (folder-faces.ts). Index
     // changes redraw the grid anyway, so they only drop the faces (the index listener below).
     const storage = (this.#plugin as Plugin & { storage?: FolderLooks }).storage;
-    const faces = new FolderFaces(this.app.vault, this.#index, storage);
+    const faces = new FolderFaces(
+      this.app.vault,
+      this.#index,
+      storage,
+      () => settingsOf(this.#plugin).folderAutoCover,
+      () => settingsOf(this.#plugin).folderTile === 'one',
+    );
     this.#faces = faces;
     this.#tiles.setFolderFaces((path) => faces.face(path));
     const refaced = (): void => {
@@ -255,13 +276,26 @@ export class GridView extends ItemView implements BubaGridView {
       }),
     );
     // A back plate in the cover's color is counted only under its settings: they turn it on for shown folders.
-    let plate = `${settingsOf(this.#plugin).folderCover}|${settingsOf(this.#plugin).folderPlate}`;
+    const plateOf = (settings: BubaSettings): string => `${coverInFront(settings)}|${settings.folderPlate}`;
+    let plate = plateOf(settingsOf(this.#plugin));
     this.register(
       onSettingsChange(this.#plugin, (settings) => {
-        const next = `${settings.folderCover}|${settings.folderPlate}`;
+        const next = plateOf(settings);
         if (next === plate) return;
         plate = next;
         this.#tiles?.recolor();
+      }),
+    );
+    // "Cover from contents" and "One picture, the cover" change which folders show a picture.
+    const facesOf = (settings: BubaSettings): string =>
+      `${settings.folderAutoCover}|${settings.folderTile === 'one'}`;
+    let shown = facesOf(settingsOf(this.#plugin));
+    this.register(
+      onSettingsChange(this.#plugin, (settings) => {
+        const next = facesOf(settings);
+        if (next === shown) return;
+        shown = next;
+        refaced();
       }),
     );
     const cover = (file: TAbstractFile): void => {
@@ -274,10 +308,30 @@ export class GridView extends ItemView implements BubaGridView {
     this.registerDomEvent(body, 'focusin', () => keymap.pushScope(this.#keys.body));
     this.registerDomEvent(body, 'focusout', () => keymap.popScope(this.#keys.body));
     this.registerDomEvent(body, 'dblclick', (evt) => this.#openFolder(body, evt));
+    // The middle button opens a folder tile in a new tab, as Obsidian's file explorer; file tiles: viewer/open.ts.
+    // The press is cancelled, or Windows starts middle-button autoscroll and no `auxclick` follows.
+    this.registerDomEvent(body, 'mousedown', (evt) => {
+      if (evt.button === 1 && this.#folderAt(evt) !== null) evt.preventDefault();
+    });
+    this.registerDomEvent(body, 'auxclick', (evt) => {
+      const path = evt.button === 1 ? this.#folderAt(evt) : null;
+      if (path === null) return;
+      evt.preventDefault();
+      void this.#assets.openGrid(folderSource(path), true);
+    });
     // The registry changed: the grid may now show another place, a module source instead of a folder or back.
     this.register(this.#assets.onChange(() => this.#replace(true)));
     this.register(this.#views.onChange(() => this.#replace(false)));
     this.registerEvent(this.app.vault.on('rename', (file, oldPath) => this.#renamed(file, oldPath)));
+    // A batch is over: what waited for its pace is drawn now.
+    this.register(
+      onBatchEnd(() => {
+        if (!this.#paced) return;
+        window.clearTimeout(this.#paced);
+        this.#paced = 0;
+        this.#schedule();
+      }),
+    );
     this.register(
       this.#index.onChange(() => {
         this.#faces?.clear();
@@ -301,6 +355,8 @@ export class GridView extends ItemView implements BubaGridView {
     this.app.keymap.popScope(this.#keys.body);
     if (this.#frame) cancelAnimationFrame(this.#frame);
     this.#frame = 0;
+    window.clearTimeout(this.#paced);
+    this.#paced = 0;
     this.#offProvider?.();
     this.#offProvider = null;
     this.#provider = undefined;
@@ -347,6 +403,7 @@ export class GridView extends ItemView implements BubaGridView {
    * `buba:open`, the layout, back and forward, a new tab.
    */
   override async setState(state: unknown, result: ViewStateResult): Promise<void> {
+    if (this.#retabbing) return super.setState(state, result);
     this.#views.arrived(state);
     const next = this.#placed(this.#followed(normalizeGridViewState(state)));
     if (isNavigationStep(this.#state, next)) result.history = true;
@@ -453,7 +510,21 @@ export class GridView extends ItemView implements BubaGridView {
     if (evt.button !== 0 || typeof el?.closest !== 'function') return;
     const first = seriesTile(body, evt);
     const path = first === undefined ? el.closest<HTMLElement>('.buba-tile[data-path]')?.dataset.path : first;
-    if (path && this.app.vault.getFolderByPath(path)) this.setGridState({ folder: path });
+    if (!path || !this.app.vault.getFolderByPath(path)) return;
+    // With Ctrl (Cmd) in a new tab, with Ctrl+Alt to the right, as Obsidian's file explorer.
+    const pane = Keymap.isModEvent(evt);
+    if (pane) void this.#assets.openGrid(folderSource(path), pane);
+    else this.setGridState({ folder: path });
+  }
+
+  /** The folder of the tile under a press, or `null`. */
+  #folderAt(evt: MouseEvent): string | null {
+    const el = evt.target as Element | null;
+    const path =
+      typeof el?.closest === 'function'
+        ? el.closest<HTMLElement>('.buba-tile[data-path]')?.dataset.path
+        : undefined;
+    return path && this.app.vault.getFolderByPath(path) ? path : null;
   }
 
   /** The state with the look of the place it shows; the same state if the look is unchanged or unknown. */
@@ -510,7 +581,34 @@ export class GridView extends ItemView implements BubaGridView {
     this.#rememberTypes();
     this.#shownSource = JSON.stringify(this.#source().source);
     this.#schedule();
+    this.#retitle();
+    this.#retab();
     this.app.workspace.requestSaveLayout();
+  }
+
+  /**
+   * The tab title: Obsidian redraws it only on `setViewState`. The same state again, which the view lets
+   * through untouched: no history step, no redraw, no "state changed".
+   */
+  #retab(): void {
+    const step = async (): Promise<void> => {
+      if (this.leaf.view !== this) return;
+      this.#retabbing = true;
+      try {
+        await this.leaf.setViewState({ type: GRID_VIEW_TYPE, state: this.getState() });
+      } finally {
+        this.#retabbing = false;
+      }
+    };
+    this.#steps = this.#steps.then(step, step);
+  }
+
+  /**
+   * The title in the view header, next to back and forward, is what the tab title says. Obsidian sets it once
+   * when the view opens: a file view renews it on load and rename, a view of its own does it itself.
+   */
+  #retitle(): void {
+    this.containerEl.querySelector<HTMLElement>('.view-header-title')?.setText(this.getDisplayText());
   }
 
   /**
@@ -527,13 +625,24 @@ export class GridView extends ItemView implements BubaGridView {
     this.#rememberTypes();
     this.#state = state;
     this.#render();
+    this.#retitle();
     this.app.workspace.requestSaveLayout();
     this.app.workspace.trigger(GRID_STATE_CHANGE, this);
   }
 
-  /** Index and source changes are batched into one redraw per frame. */
+  /**
+   * Index and source changes are batched into one redraw per frame; while a batch of moves runs, into one
+   * redraw per `BATCH_FRAME_MS` (src/platform/files/batch.ts).
+   */
   #schedule(): void {
-    if (this.#frame || !this.#tiles) return;
+    if (this.#frame || this.#paced || !this.#tiles) return;
+    if (batchRunning()) {
+      this.#paced = window.setTimeout(() => {
+        this.#paced = 0;
+        this.#render(true);
+      }, BATCH_FRAME_MS);
+      return;
+    }
     this.#frame = window.requestAnimationFrame(() => {
       this.#frame = 0;
       this.#render(true);
@@ -624,6 +733,8 @@ export class GridView extends ItemView implements BubaGridView {
     if (!this.#toolbar || !this.#tiles) return;
     if (this.#frame) cancelAnimationFrame(this.#frame);
     this.#frame = 0;
+    window.clearTimeout(this.#paced);
+    this.#paced = 0;
     const edits = fromFrame && this.#edit === 'edits' ? this.#pendingEdits : 0;
     this.#edit = 'none';
     this.#pendingEdits = 0;
@@ -661,7 +772,11 @@ export class GridView extends ItemView implements BubaGridView {
     this.#bar.tally = tally;
     this.#renderBar(hiddenNew);
     const { folder } = this.#state;
-    const subfolders = !foreign && folder !== null ? this.#index.subfolders(folder) : [];
+    const subfolders = foreign
+      ? (provider?.folders?.(source) ?? [])
+      : folder !== null
+        ? this.#index.subfolders(folder)
+        : [];
     const sortKey = this.#assets.sortKeys().find((key) => key.id === this.#state.sort);
     // "Then by": a key missing from the registry, or "None", means no second level.
     const thenKey = this.#assets.sortKeys().find((key) => key.id === this.#state.thenSort);
@@ -739,4 +854,9 @@ export class GridView extends ItemView implements BubaGridView {
     for (const line of lines) hint.createDiv({ text: line });
     this.#hint = hint;
   }
+}
+
+/** The folder `path` alone, without subfolders, as a source to open in another tab. */
+function folderSource(path: string): FolderSource {
+  return { kind: 'folder', path, withSubfolders: false };
 }

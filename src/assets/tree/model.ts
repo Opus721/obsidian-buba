@@ -2,6 +2,7 @@
 // builds a flat list of visible rows in display order. The tree view renders markup from it.
 import { movedPath } from '../../core/layout/view-state.ts';
 import { ROOT, nameOf } from '../../platform/files/file-index.ts';
+import type { FolderTime } from '../../platform/files/folder-times.ts';
 
 /** Where the model takes folders from; the file index (`FileIndex`) fits as is. */
 export interface TreeFolders {
@@ -24,25 +25,62 @@ export interface FolderRow {
 }
 
 /**
- * Tree folder order, like the "Sort order" of Obsidian's file explorer (`sortOrder`, app.js 1.14.4): by name
- * A to Z and Z to A. Z to A is A to Z reversed (Obsidian negates the A to Z comparison), so numbers in names
- * still compare by value and `img10` comes before `img2`.
+ * Tree folder order, like the "Sort order" of Obsidian's file explorer (`sortOrder`, app.js 1.14.4), with its
+ * names: by name A to Z and Z to A, by modified time and by created time, new to old and (`…Reverse`) old to
+ * new. Z to A is A to Z reversed (Obsidian negates the A to Z comparison), so numbers in names still compare
+ * by value and `img10` comes before `img2`. Obsidian's explorer keeps folders by name in every order; the tree
+ * has only folders, so the dates apply to them, as the system file manager sorts folders by "Date created".
  */
-export const FOLDER_ORDERS = ['alphabetical', 'alphabeticalReverse'] as const;
+export const FOLDER_ORDERS = [
+  'alphabetical',
+  'alphabeticalReverse',
+  'byModifiedTime',
+  'byModifiedTimeReverse',
+  'byCreatedTime',
+  'byCreatedTimeReverse',
+] as const;
 export type FolderOrder = (typeof FOLDER_ORDERS)[number];
 
+/** Folder times for the date orders; `undefined` while a folder's time is not known. */
+export type FolderTimeOf = (path: string) => FolderTime | undefined;
+
+/** Whether `order` sorts by a date and needs folder times. */
+export function isDateOrder(order: FolderOrder): boolean {
+  return order !== 'alphabetical' && order !== 'alphabeticalReverse';
+}
+
 /**
- * Visible rows: root folders and, under each expanded one, its subfolders, by name in `order` at every level.
+ * Sibling folders, given by name, in `order`. Equal dates keep the name order; folders whose time is not
+ * known yet go after the dated ones, by name.
+ */
+export function ordered(byName: readonly string[], order: FolderOrder, time?: FolderTimeOf): string[] {
+  if (order === 'alphabetical') return [...byName];
+  if (order === 'alphabeticalReverse') return [...byName].reverse();
+  const key = order.startsWith('byModified') ? 'mtime' : 'ctime';
+  const sign = order.endsWith('Reverse') ? 1 : -1;
+  const dated = byName.map((path) => ({ path, at: time?.(path)?.[key] }));
+  return dated
+    .sort((a, b) => {
+      if (a.at === undefined || b.at === undefined)
+        return (a.at === undefined ? 1 : 0) - (b.at === undefined ? 1 : 0);
+      return sign * (a.at - b.at);
+    })
+    .map(({ path }) => path);
+}
+
+/**
+ * Visible rows: root folders and, under each expanded one, its subfolders, in `order` at every level; the date
+ * orders read folder times from `time`.
  */
 export function treeRows(
   folders: TreeFolders,
   expanded: ReadonlySet<string>,
   order: FolderOrder = 'alphabetical',
+  time?: FolderTimeOf,
 ): FolderRow[] {
   const rows: FolderRow[] = [];
   const walk = (folder: string, depth: number): void => {
-    const byName = folders.subfolders(folder);
-    for (const path of order === 'alphabeticalReverse' ? [...byName].reverse() : byName) {
+    for (const path of ordered(folders.subfolders(folder), order, time)) {
       const hasChildren = folders.subfolders(path).length > 0;
       const open = hasChildren && expanded.has(path);
       rows.push({ path, name: nameOf(path), depth, hasChildren, expanded: open, count: folders.count(path) });

@@ -1,5 +1,5 @@
-// Tag commands: "Create tag…" opens the same dialog as "+ New tag" and the "All tags" menu item
-// (tag-menu.ts); "Open untagged files" opens the "Untagged" source in the grid, like clicking its tree row.
+// Tag commands: "Create tag…" opens the same dialog as "+ New tag", the "All tags" menu item (tag-menu.ts) and
+// the "New tag" button of the tree's header; "Open untagged files" opens the "Untagged" source in the grid, like clicking its tree row.
 // Without storage (journals failed to load) or without the "Untagged" source the commands are unavailable.
 // They are registered by the src/assets/commands.ts hub, not by the tags entry point (tags/index.ts).
 import type { Plugin } from 'obsidian';
@@ -15,6 +15,17 @@ export function registerTagCommands(
   assets: BubaAssets,
   storage: () => TagStorage | undefined,
 ): void {
+  // The same dialog from the tree's header, next to "New folder" (word of the owner 27.10 22:22).
+  assets.registerTreeButton({
+    id: 'new-tag',
+    icon: 'lucide-tag',
+    title: t('newTag'),
+    order: 10,
+    run: () => {
+      const current = storage();
+      if (current) openNewTag(plugin.app, current, null);
+    },
+  });
   plugin.addCommand({
     id: 'new-tag',
     name: t('commandNewTag'),

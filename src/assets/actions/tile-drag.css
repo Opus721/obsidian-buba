@@ -1,0 +1,14 @@
+/* Drag ghost of a tile drag (tile-drag.ts): Obsidian's `drag-ghost` with the tile preview above the name. The
+   cursor holds its top left corner. */
+.buba-tile-ghost {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-3);
+  max-width: 240px;
+}
+
+.buba-tile-ghost canvas {
+  display: block;
+  align-self: flex-start;
+  border-radius: var(--radius-s);
+}

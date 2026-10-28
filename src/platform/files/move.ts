@@ -15,10 +15,21 @@ import { planMoves, type SkipReason, type Skipped } from '../../core/actions/mov
 import { t } from '../../core/i18n/dict/platform.ts';
 import { deviceId } from '../device.ts';
 import { actionJournal } from './action-journal.ts';
+import { BATCH_MIN, inBatch } from './batch.ts';
 
 export type Failed = MoveOp & { error: string };
-/** Batch result: moved; skipped by the plan, with a reason; failed, with the error text. */
-export type MoveResult = { moved: MoveOp[]; skipped: Skipped[]; failed: Failed[] };
+/**
+ * Batch result: moved; skipped by the plan, with a reason; failed, with the error text; `left` only when the
+ * batch was stopped: what stayed in place.
+ */
+export type MoveResult = { moved: MoveOp[]; skipped: Skipped[]; failed: Failed[]; left?: MoveOp[] };
+/** Watch over a batch: progress after each move, and a stop asked before the next one. */
+export interface MoveWatch {
+  /** Moves handled so far (moved or failed) out of `total`. */
+  progress?(handled: number, total: number): void;
+  /** `true` stops the batch: the moves not yet made get `left` lines and stay in place. */
+  stopped?(): boolean;
+}
 /**
  * An unfinished move and its check against disk: `done` means the file is already at the new place, `pending`
  * that it is still at the old one, `conflict` that both paths exist or neither does.
@@ -41,34 +52,55 @@ function batchId(at: string): string {
   return `${at}-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
-/**
- * One move: "started" → `renameFile` → "done" or "failed" with the error text. A failed move does not stop
- * the batch; a failed journal write throws: without a "started" line the file is not touched, and a move
- * without "done" is found by the startup check.
- */
-async function moveOne(
-  { app, device, journal }: Context,
-  batch: string,
-  seq: number,
-  op: MoveOp,
-  result: MoveResult,
-) {
-  await journal.append([stageLine(batch, seq, 'start', now(), device)]);
-  let error: string | undefined;
+/** Moves of a large batch that share one "started" append and one append of their outcomes. */
+export const JOURNAL_CHUNK = 50;
+
+/** `renameFile` of one move; the error text, or `undefined` if it moved. */
+async function rename(app: App, op: MoveOp): Promise<string | undefined> {
   try {
     const file = app.vault.getAbstractFileByPath(op.from);
     if (!file) throw new Error(t('fileMissing'));
     await app.fileManager.renameFile(file, op.to);
   } catch (caught) {
-    error = caught instanceof Error && caught.message ? caught.message : String(caught);
+    return caught instanceof Error && caught.message ? caught.message : String(caught);
   }
-  if (error === undefined) {
-    await journal.append([stageLine(batch, seq, 'done', now(), device)]);
-    result.moved.push(op);
-  } else {
-    await journal.append([stageLine(batch, seq, 'fail', now(), device, error)]);
-    result.failed.push({ ...op, error });
+  return undefined;
+}
+
+/**
+ * Moves `chunk` (each with its 1-based `seq`): "started" lines of all → `renameFile` one by one → "done" or
+ * "failed" lines of all. A failed move does not stop the batch; a failed journal write throws: without a
+ * "started" line the file is not touched, and a move without "done" is found by the startup check, which
+ * looks at the disk. A chunk of one is "started" → `renameFile` → "done"; a large batch takes
+ * `JOURNAL_CHUNK` moves at a time, since one journal append costs about as much as one `renameFile`.
+ */
+async function moveChunk(
+  { app, device, journal }: Context,
+  batch: string,
+  chunk: readonly { seq: number; op: MoveOp }[],
+  result: MoveResult,
+  watch: MoveWatch,
+  total: number,
+) {
+  await journal.append(chunk.map(({ seq }) => stageLine(batch, seq, 'start', now(), device)));
+  const outcomes = [];
+  for (const { seq, op } of chunk) {
+    if (watch.stopped?.()) {
+      outcomes.push(stageLine(batch, seq, 'left', now(), device));
+      (result.left ??= []).push(op);
+      continue;
+    }
+    const error = await rename(app, op);
+    if (error === undefined) {
+      outcomes.push(stageLine(batch, seq, 'done', now(), device));
+      result.moved.push(op);
+    } else {
+      outcomes.push(stageLine(batch, seq, 'fail', now(), device, error));
+      result.failed.push({ ...op, error });
+    }
+    watch.progress?.(result.moved.length + result.failed.length, total);
   }
+  await journal.append(outcomes);
 }
 
 /**
@@ -80,25 +112,39 @@ export async function moveFiles(
   app: App,
   paths: readonly string[],
   targetFolder: string,
+  watch: MoveWatch = {},
 ): Promise<MoveResult> {
   const { ops, skipped } = planMoves(paths, targetFolder, inVault(app));
-  const { moved, failed } = await moveOps(app, ops);
-  return { moved, skipped, failed };
+  const { moved, failed, left } = await moveOps(app, ops, watch);
+  return { moved, skipped, failed, ...(left && { left }) };
 }
 
 /**
  * Moves `ops` as a batch, each into its own folder (used by undo and redo): plan lines to the device journal
- * → for each, "started" → `renameFile` → "done" or "failed". The caller does the disk check; with nothing to
- * move the journal is untouched.
+ * → "started" → `renameFile` → "done" or "failed", per move or per `JOURNAL_CHUNK` moves. Stopped by `watch`,
+ * the rest gets `left` lines in one append. The caller does the disk check; with nothing to move the journal
+ * is untouched.
  */
-export async function moveOps(app: App, ops: readonly MoveOp[]): Promise<MoveResult> {
+export async function moveOps(app: App, ops: readonly MoveOp[], watch: MoveWatch = {}): Promise<MoveResult> {
   const result: MoveResult = { moved: [], skipped: [], failed: [] };
   if (ops.length === 0) return result;
   const ctx = context(app);
   const at = now();
   const batch = batchId(at);
   await ctx.journal.append(planLines(batch, ops, at, ctx.device));
-  for (const [index, op] of ops.entries()) await moveOne(ctx, batch, index + 1, op, result);
+  const size = ops.length >= BATCH_MIN ? JOURNAL_CHUNK : 1;
+  const numbered = ops.map((op, index) => ({ seq: index + 1, op }));
+  await inBatch(ops.length, async () => {
+    for (let at = 0; at < numbered.length; at += size) {
+      if (watch.stopped?.()) {
+        const rest = numbered.slice(at);
+        await ctx.journal.append(rest.map(({ seq }) => stageLine(batch, seq, 'left', now(), ctx.device)));
+        (result.left ??= []).push(...rest.map(({ op }) => op));
+        break;
+      }
+      await moveChunk(ctx, batch, numbered.slice(at, at + size), result, watch, ops.length);
+    }
+  });
   return result;
 }
 
@@ -135,7 +181,7 @@ export async function finishMoves(app: App, batch: string): Promise<MoveResult> 
     const op = { from, to };
     const state = reconcile(op, onDisk);
     if (state === 'pending') {
-      await moveOne(ctx, batch, seq, op, result);
+      await moveChunk(ctx, batch, [{ seq, op }], result, {}, 1);
     } else if (state === 'done') {
       await ctx.journal.append([stageLine(batch, seq, 'done', now(), ctx.device)]);
       result.moved.push(op);

@@ -9,12 +9,17 @@
 // file finds where each file went (`trashSwept`), records the step (`deleteRecorded`), restores from
 // Obsidian's trash (`restoreStep`) and says what can be deleted again (`trashReady`). Deletion and restore
 // are not written to the action journal: `trashFile` and `adapter.rename` are each one atomic disk operation,
-// with nothing to finish. Only types come from `obsidian`: the test substitutes a fake `app`.
-import type { App, TAbstractFile, TFile } from 'obsidian';
+// with nothing to finish. A folder is deleted and restored the same way, as one item. Created files and
+// folders are recorded with their trees (`recordCreated`); undoing that puts what is unchanged into the trash
+// by the Obsidian setting (`uncreateStep`), and redo brings it back from Obsidian's trash (`recreateStep`).
+// Changes Buba cannot undo yet are stops on the stack (`recordFixed`). Only types come from `obsidian`: the
+// test substitutes a fake `app`.
+import type { App, TAbstractFile } from 'obsidian';
 import type { MoveOp } from '../../core/actions/journal.ts';
 import {
   TRASH,
   UndoHistory,
+  checkCreated,
   checkMoves,
   checkRestores,
   invert,
@@ -23,8 +28,15 @@ import {
   restoreOrder,
   trashCandidate,
   trashOrigins,
+  type CreateOp,
+  type CreateStep,
+  type CreateWhat,
+  type CreatedUnchecked,
   type Disk,
   type FilePrint,
+  type Made,
+  type TrashPrint,
+  type UncreateStep,
   type LocalTrashOp,
   type MovesStep,
   type Print,
@@ -140,12 +152,12 @@ export type StepRun = { step: Step; done: number; skipped: Unchecked[]; failed: 
 export function undoStep(app: App, step: MovesStep): Promise<StepRun>;
 export function undoStep(
   app: App,
-  step: Step,
+  step: MovesStep | TrashStep,
   kept?: (path: string) => boolean,
 ): Promise<StepRun | TrashUndo>;
 export async function undoStep(
   app: App,
-  step: Step,
+  step: MovesStep | TrashStep,
   kept?: (path: string) => boolean,
 ): Promise<StepRun | TrashUndo> {
   if (step.kind === 'trash') return restoreStep(app, step, kept);
@@ -235,9 +247,10 @@ async function trashEntries(app: App): Promise<string[]> {
  * Size and time of the file at a path via `adapter.stat`, since a file in `.trash` has no `TFile`; `null`
  * otherwise.
  */
-async function printAt(app: App, path: string): Promise<FilePrint | null> {
+async function printAt(app: App, path: string): Promise<TrashPrint | null> {
   try {
     const stat = await app.vault.adapter.stat(path);
+    if (stat?.type === 'folder') return 'folder';
     return stat?.type === 'file' ? statPrint(stat) : null;
   } catch (error) {
     console.error('Buba: file in Obsidian trash not read', path, error);
@@ -248,13 +261,13 @@ async function printAt(app: App, path: string): Promise<FilePrint | null> {
 /** Deletes with Obsidian's dialog, as its file explorer does: `false` means the dialog was closed. */
 export const viaPrompt =
   (app: App) =>
-  (file: TFile): Promise<boolean> =>
+  (file: TAbstractFile): Promise<boolean> =>
     app.fileManager.promptForDeletion(file);
 
 /** Deletes without a dialog of its own (already confirmed); where it goes is up to the Obsidian setting. */
 export const viaTrashFile =
   (app: App) =>
-  async (file: TFile): Promise<boolean> => {
+  async (file: TAbstractFile): Promise<boolean> => {
     await app.fileManager.trashFile(file);
     return true;
   };
@@ -275,41 +288,39 @@ export type TrashRun = { ops: TrashOp[]; failed: TrashFailed[] };
  */
 export async function trashSwept(
   app: App,
-  files: readonly TFile[],
+  files: readonly TAbstractFile[],
   option: unknown,
-  remove: (file: TFile) => Promise<boolean>,
+  remove: (file: TAbstractFile) => Promise<boolean>,
 ): Promise<TrashRun> {
   const toTrash = option !== 'none';
   const taken = new Set((toTrash ? await trashEntries(app) : []).map(lower));
-  const gone: { from: string; name: string; print: FilePrint }[] = [];
+  const gone: { from: string; name: string; print: TrashPrint }[] = [];
   const failed: TrashFailed[] = [];
   for (const file of files) {
     const { path: from, name } = file;
-    const print = statPrint(file.stat);
-    markOwnDelete(from);
+    const print: TrashPrint = isFile(file) ? statPrint(file.stat) : 'folder';
+    // A folder's files are marked too: the vault reports each of them deleted.
+    const marked = [from, ...filesIn(file).map(({ path }) => path)];
+    for (const path of marked) markOwnDelete(path);
+    let deleted = false;
     try {
-      if (!(await remove(file))) {
-        settleOwnDelete(from, false);
-        continue;
-      }
+      deleted = await remove(file);
     } catch (error) {
-      settleOwnDelete(from, false);
       console.error('Buba: file not deleted', from, error);
       failed.push({ from, error: errorText(error) });
-      continue;
     }
-    settleOwnDelete(from, true);
-    gone.push({ from, name, print });
+    for (const path of marked) settleOwnDelete(path, deleted);
+    if (deleted) gone.push({ from, name, print });
   }
   const found: (string | null)[] = gone.map(() => null);
   if (toTrash) {
     // Fingerprints of `.trash` paths already read, so the fallback check does not read them again.
-    const known = new Map<string, FilePrint | null>();
+    const known = new Map<string, TrashPrint | null>();
     for (const [i, { name, print }] of gone.entries()) {
       const expected = trashCandidate(name, taken);
       const there = await printAt(app, expected);
       known.set(lower(expected), there);
-      if (there && samePrint(there, print)) {
+      if (there && sameTrashPrint(there, print)) {
         found[i] = expected;
         taken.add(lower(expected));
       }
@@ -317,7 +328,7 @@ export async function trashSwept(
     const lost = gone.flatMap((each, i) => (found[i] ? [] : [{ i, ...each }]));
     if (lost.length && option !== 'system') {
       const names = new Set(lost.map(({ name }) => lower(name)));
-      const prints = new Map<string, FilePrint>();
+      const prints = new Map<string, TrashPrint>();
       for (const path of await trashEntries(app)) {
         if (taken.has(lower(path)) || !trashOrigins(path).some(({ name }) => names.has(name))) continue;
         const there = known.has(lower(path)) ? known.get(lower(path)) : await printAt(app, path);
@@ -342,9 +353,9 @@ export async function trashSwept(
 /** Deletes (`trashSwept`) and records an undo step for the deletion; no step if nothing was deleted. */
 export async function deleteRecorded(
   app: App,
-  files: readonly TFile[],
+  files: readonly TAbstractFile[],
   option: unknown,
-  remove: (file: TFile) => Promise<boolean>,
+  remove: (file: TAbstractFile) => Promise<boolean>,
 ): Promise<TrashRun> {
   const run = await trashSwept(app, files, option, remove);
   undoHistory(app).push({ kind: 'trash', ops: run.ops });
@@ -372,7 +383,7 @@ export async function restoreStep(
   kept: (path: string) => boolean = () => false,
 ): Promise<TrashUndo> {
   const ops = [...step.ops].reverse();
-  const inTrash = new Map<string, FilePrint | null>();
+  const inTrash = new Map<string, TrashPrint | null>();
   for (const op of ops) if (op.where === 'local') inTrash.set(op.to, await printAt(app, op.to));
   const checked = checkRestores(ops, vaultDisk(app), (path) => inTrash.get(path) ?? null);
   const { first, awaited, later } = restoreOrder(checked.ops, kept);
@@ -454,23 +465,122 @@ function watchCreated(app: App) {
   };
 }
 
+type FileLike = TAbstractFile & { stat: { size: number; mtime: number } };
+
 /** A file, not a folder: only files carry `stat`. */
-const isFile = (item: TAbstractFile | null): item is TFile => item !== null && 'stat' in item;
+const isFile = (item: TAbstractFile | null): item is FileLike => item !== null && 'stat' in item;
+
+/** Children of a folder; none for a file. */
+const childrenOf = (item: TAbstractFile): readonly TAbstractFile[] =>
+  (item as { children?: TAbstractFile[] }).children ?? [];
+
+/** All files inside a folder, at any depth; none for a file. */
+export function filesIn(item: TAbstractFile): FileLike[] {
+  return childrenOf(item).flatMap((child) => (isFile(child) ? [child] : filesIn(child)));
+}
 
 /**
- * Redo of a deletion: which of the step's files are at their old place as the same file (size and time);
- * those are deleted again, a different file is "file changed", none is "file missing". Confirmation and
- * deletion are up to the caller.
+ * Redo of a deletion: which of the step's files are at their old place as the same file (size and time), and
+ * which folders are back in place; those are deleted again, a different file or a file where a folder was is
+ * "file changed", none is "file missing". Confirmation and deletion are up to the caller.
  */
-export function trashReady(app: App, step: TrashStep): { files: TFile[]; skipped: TrashUnchecked[] } {
-  const files: TFile[] = [];
+export function trashReady(app: App, step: TrashStep): { files: TAbstractFile[]; skipped: TrashUnchecked[] } {
+  const files: TAbstractFile[] = [];
   const skipped: TrashUnchecked[] = [];
   for (const op of step.ops) {
     const file = app.vault.getAbstractFileByPath(op.from);
-    const print = isFile(file) ? statPrint(file.stat) : null;
-    if (!print || !isFile(file)) skipped.push({ op, why: 'missing' });
-    else if (!samePrint(print, op.print)) skipped.push({ op, why: 'changed' });
+    const print: TrashPrint | null = isFile(file) ? statPrint(file.stat) : file ? 'folder' : null;
+    if (!print || !file) skipped.push({ op, why: 'missing' });
+    else if (!sameTrashPrint(print, op.print)) skipped.push({ op, why: 'changed' });
     else files.push(file);
   }
   return { files, skipped };
+}
+
+const sameTrashPrint = (a: TrashPrint, b: TrashPrint): boolean =>
+  a === 'folder' || b === 'folder' ? a === b : samePrint(a, b);
+
+// Creating
+
+/**
+ * The tree at a path as it is now, the item first, then everything inside a folder: object and size. `null`
+ * if nothing is there.
+ */
+function treeAt(app: App, path: string): Made[] | null {
+  const item = app.vault.getAbstractFileByPath(path);
+  if (!item) return null;
+  const tree: Made[] = [];
+  const walk = (each: TAbstractFile): void => {
+    tree.push({ path: each.path, item: each, size: isFile(each) ? each.stat.size : null });
+    for (const child of childrenOf(each)) walk(child);
+  };
+  walk(item);
+  return tree;
+}
+
+/**
+ * Records a create step: `paths` are what the action made in folder `place` (its name as shown), each with
+ * its tree as it is now. Paths Obsidian does not see are left out; nothing seen, no step.
+ */
+export function recordCreated(app: App, what: CreateWhat, place: string, paths: readonly string[]): void {
+  const ops: CreateOp[] = [];
+  for (const path of paths) {
+    const tree = treeAt(app, path);
+    if (tree) ops.push({ path, tree });
+  }
+  undoHistory(app).push({ kind: 'create', what, place, ops });
+}
+
+/** Records a change Buba cannot undo yet: a stop on the undo stack. */
+export function recordFixed(app: App): void {
+  undoHistory(app).push({ kind: 'fixed', ops: [] });
+}
+
+/** Result of undoing a create step: `step` is what went to the trash, for redo. */
+export type UncreateRun = {
+  step: UncreateStep;
+  done: number;
+  skipped: CreatedUnchecked[];
+  failed: TrashFailed[];
+};
+
+/**
+ * Undoes a create step: what is still as Buba made it (`checkCreated`) is deleted with `trashFile` by the
+ * Obsidian "Deleted files" setting, in reverse order; a changed or missing item stays and is named in the
+ * notice. `option` is that setting, read by the caller.
+ */
+export async function uncreateStep(app: App, step: CreateStep, option: unknown): Promise<UncreateRun> {
+  const checked = checkCreated([...step.ops].reverse(), (path) => treeAt(app, path));
+  const items = checked.ops
+    .map(({ path }) => app.vault.getAbstractFileByPath(path))
+    .filter((item): item is TAbstractFile => item !== null);
+  const run = await trashSwept(app, items, option, viaTrashFile(app));
+  return {
+    step: { kind: 'uncreate', what: step.what, place: step.place, ops: run.ops },
+    done: run.ops.length,
+    skipped: checked.skipped,
+    failed: run.failed,
+  };
+}
+
+/** Result of redoing a create step: the restore outcome and the create step to undo again. */
+export type RecreateRun = TrashOutcome & { step: CreateStep };
+
+/**
+ * Redoes an undone create step: brings its items back from Obsidian's trash (`restoreStep`, same checks)
+ * and records them again with their trees as they are now.
+ */
+export async function recreateStep(
+  app: App,
+  step: UncreateStep,
+  kept?: (path: string) => boolean,
+): Promise<RecreateRun> {
+  const run = await restoreStep(app, { kind: 'trash', ops: step.ops }, kept);
+  const ops: CreateOp[] = [];
+  // The trash step is in deletion order, the reverse of creation.
+  for (const { from } of [...run.step.ops].reverse()) {
+    const tree = treeAt(app, from);
+    if (tree) ops.push({ path: from, tree });
+  }
+  return { ...run, step: { kind: 'create', what: step.what, place: step.place, ops } };
 }

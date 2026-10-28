@@ -336,3 +336,18 @@
 .buba-tile.has-text .buba-tile-image {
   display: none;
 }
+
+/* Room for the format badge in the top right corner: the first lines flow around it, so it covers no word. */
+.buba-tile.has-text .buba-tile-text::before {
+  content: '';
+  float: inline-end;
+  width: 30px;
+  height: calc(var(--size-4-1) + var(--buba-cmt-size, 22px) - var(--size-4-2));
+}
+
+/* A note without text: its name on the text card, as the title of an empty page. */
+.buba-tile.has-text.is-title-text .buba-tile-text {
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+  mask-image: none;
+}

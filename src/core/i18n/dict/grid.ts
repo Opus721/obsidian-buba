@@ -29,6 +29,7 @@ const en = {
   commandToggleNames: 'Toggle file names',
   commandToggleSubfolders: 'Toggle “Include subfolders”',
   commandOpenParent: 'Open parent folder',
+  commandSelectAll: 'Select all tiles',
 
   sortCreated: 'Date added',
   sortName: 'Name',
@@ -104,6 +105,7 @@ export const strings: Dictionary<typeof en> = {
     commandToggleNames: 'Включить/отключить имена файлов',
     commandToggleSubfolders: 'Включить/отключить «Вместе с подпапками»',
     commandOpenParent: 'Открыть папку выше',
+    commandSelectAll: 'Выделить все плитки',
 
     sortCreated: 'По дате добавления',
     sortName: 'По имени',

@@ -11,8 +11,11 @@ export interface TreeDragKind {
   buba: boolean;
   /** System files (`types` contains `Files`). */
   files: boolean;
-  /** Path of a folder dragged from the Buba tree (src/platform/tree-drag.ts); absent or `null` otherwise. */
-  folder?: string | null;
+  /**
+   * Paths of the folders dragged from the Buba tree (src/platform/tree-drag.ts): one, or the rows picked with
+   * Ctrl and Shift; absent or `null` otherwise.
+   */
+  folders?: readonly string[] | null;
 }
 
 export interface TreeDropTarget {
@@ -24,13 +27,13 @@ export interface TreeDropTarget {
 /**
  * Drop target of a tree row: `folder` is the row's folder path, `ROOT` the vault root ("All files" and the
  * empty space below the folders), `null` means the row is not a folder ("Untagged", a tag). A dragged folder
- * goes by `folderDrop`; the root takes only a folder. Own data wins over system data: Buba tiles are moved
+ * goes by `foldersDrop`; the root takes only a folder. Own data wins over system data: Buba tiles are moved
  * even if files come with them. Neither tiles nor files (text, a link from a note) is not a target.
  */
 export function treeDrop(drag: TreeDragKind, folder: string | null): TreeDropTarget | null {
   if (folder === null) return null;
-  if (drag.folder) {
-    const to = folderDrop(drag.folder, folder);
+  if (drag.folders?.length) {
+    const to = foldersDrop(drag.folders, folder);
     return to === null ? null : { action: 'move', folder: to };
   }
   if (folder === ROOT) return null;
@@ -47,4 +50,13 @@ export function treeDrop(drag: TreeDragKind, folder: string | null): TreeDropTar
 export function folderDrop(dragged: string, target: string): string | null {
   if (target === dragged || target.startsWith(`${dragged}/`)) return null;
   return parentFolder(dragged) === target ? null : target;
+}
+
+/**
+ * Where folders `dragged` go when dropped on `target`, by the rule of `folderDrop`: `null` when the target is
+ * one of them or inside one, or when every one of them is already in it.
+ */
+export function foldersDrop(dragged: readonly string[], target: string): string | null {
+  if (dragged.some((path) => target === path || target.startsWith(`${path}/`))) return null;
+  return dragged.some((path) => parentFolder(path) !== target) ? target : null;
 }

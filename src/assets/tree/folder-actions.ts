@@ -9,14 +9,21 @@
 // dialog names them first, as for a tile, and the folder goes with `trashFile` by the same "Deleted files"
 // setting; the paths are marked as Buba's own deletes, so the generation module stays quiet about them. A grid
 // tab on the deleted folder or inside it then shows the folder it was in, as Eagle does; a folder deleted
-// elsewhere leaves its tab where it was (src/assets/grid/view.ts).
+// elsewhere leaves its tab where it was (src/assets/grid/view.ts). Several folders picked in the tree go after
+// one batch confirmation with their count (`deleteFolders`). A deletion is an undo step, as for files: Ctrl+Z
+// brings the folders back from Obsidian's trash (src/platform/files/undo.ts).
 import { Notice, type App, type TAbstractFile, type TFile, type TFolder } from 'obsidian';
 import { renameFolderTarget } from '../../core/actions/new-folder.ts';
 import { deleteGridFolder, GRID_VIEW_TYPE, normalizeGridViewState } from '../../core/layout/view-state.ts';
 import { t } from '../../core/i18n/dict/tree.ts';
-import { markOwnDelete, settleOwnDelete } from '../../platform/files/own-deletes.ts';
-import { renameRecorded } from '../../platform/files/undo.ts';
-import { confirmDeleteFolder, referencesOf, type PassportReader } from '../actions/menu-items.ts';
+import { coreSetting } from '../../platform/core-settings.ts';
+import { deleteRecorded, renameRecorded, viaPrompt, viaTrashFile } from '../../platform/files/undo.ts';
+import {
+  confirmDeleteFolder,
+  confirmDeleteFolders,
+  referencesOf,
+  type PassportReader,
+} from '../actions/menu-items.ts';
 import { NameModal } from '../tags/group-modals.ts';
 
 /** The name dialog with the current name selected; a refusal shows a notice and the dialog stays. */
@@ -59,15 +66,46 @@ export async function deleteFolder(app: App, folder: TFolder, passports?: Passpo
   const { name, path } = folder;
   const files = filesIn(folder);
   const uses = referencesOf(files, passports);
+  const remove =
+    uses.length && passports
+      ? async (item: TAbstractFile): Promise<boolean> => {
+          if (!(await confirmDeleteFolder(app, name, files, uses, passports))) return false;
+          await app.fileManager.trashFile(item);
+          return true;
+        }
+      : viaPrompt(app);
   try {
-    if (uses.length && passports) {
-      if (await confirmDeleteFolder(app, name, files, uses, passports)) await trashMarked(app, folder, files);
-    } else await app.fileManager.promptForDeletion(folder);
+    const run = await deleteRecorded(app, [folder], coreSetting(app, 'trashOption'), remove);
+    if (run.failed.length) new Notice(t('folderDeleteFailed', { name }));
   } catch (error) {
     console.error('Buba: folder not deleted', path, error);
     new Notice(t('folderDeleteFailed', { name }));
   }
   if (!app.vault.getAbstractFileByPath(path)) leaveDeleted(app, path);
+}
+
+/**
+ * Deletes several folders picked in the tree after one confirmation with their count and the count of files
+ * inside, the reference dialog when some files are references of generations; each goes with `trashFile`
+ * by the "Deleted files" setting, its files marked as Buba's own deletes. One failure does not stop the rest.
+ */
+export async function deleteFolders(
+  app: App,
+  folders: readonly TFolder[],
+  passports?: PassportReader,
+): Promise<void> {
+  const files = folders.flatMap(filesIn);
+  if (!(await confirmDeleteFolders(app, folders.length, files, passports))) return;
+  let failed = false;
+  try {
+    const run = await deleteRecorded(app, folders, coreSetting(app, 'trashOption'), viaTrashFile(app));
+    failed = run.failed.length > 0;
+  } catch (error) {
+    console.error('Buba: folders not deleted', error);
+    failed = true;
+  }
+  for (const { path } of folders) if (!app.vault.getAbstractFileByPath(path)) leaveDeleted(app, path);
+  if (failed) new Notice(t('foldersDeleteFailed'));
 }
 
 /** Grid tabs on the deleted folder or inside it go to the folder it was in; a tab on a module source stays. */
@@ -77,18 +115,6 @@ function leaveDeleted(app: App, deleted: string): void {
     const state = normalizeGridViewState(leaf.view.getState());
     const next = deleteGridFolder(state, deleted);
     if (next !== state && !state.source && next.folder !== null) view.setGridState?.({ folder: next.folder });
-  }
-}
-
-/** `trashFile` with the files inside marked as Buba's own deletes for the time of the call and a bit after. */
-async function trashMarked(app: App, folder: TFolder, files: readonly TFile[]): Promise<void> {
-  for (const { path } of files) markOwnDelete(path);
-  let deleted = false;
-  try {
-    await app.fileManager.trashFile(folder);
-    deleted = true;
-  } finally {
-    for (const { path } of files) settleOwnDelete(path, deleted);
   }
 }
 

@@ -4,8 +4,11 @@ import type { Plugin } from 'obsidian';
 import type { BubaAssets } from '../api.ts';
 import { registerSelection } from '../grid/selection.ts';
 import { registerViewerOpen } from '../viewer/open.ts';
+import { registerBreadcrumbs } from './breadcrumbs.ts';
+import { registerClipboard } from './clipboard.ts';
 import { registerCoverMenu } from './cover-menu.ts';
 import { registerFileMenu } from './file-menu.ts';
+import { registerFontInstall } from './font-install.ts';
 import { registerImportDrop } from './import-drop.ts';
 import { registerImportPick } from './import-pick.ts';
 import { registerMenuItems } from './menu-items.ts';
@@ -20,6 +23,9 @@ export function registerActions(plugin: Plugin, assets: BubaAssets): void {
   // Before the menu items: its `file-menu` listener runs first, so the cover items go above "Delete".
   registerCoverMenu(plugin, assets);
   registerMenuItems(plugin, assets);
+  // After the menu items: "Install font" comes after "Make a copy" in the same section.
+  registerFontInstall(plugin, assets);
+  registerClipboard(plugin, assets);
   registerViewerOpen(plugin, assets);
   registerTileDrag(plugin, assets);
   registerTreeDrop(plugin, assets);
@@ -27,4 +33,5 @@ export function registerActions(plugin: Plugin, assets: BubaAssets): void {
   registerImportPick(plugin, assets);
   registerNoteDrop(plugin, assets);
   registerUndo(plugin, assets);
+  registerBreadcrumbs(plugin, assets);
 }

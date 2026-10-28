@@ -136,7 +136,8 @@ function byName(value: unknown): unknown {
  * drops another module's source; a patch with `source` keeps the folder, which the grid returns to if the
  * source's view is not registered. A patch with a different sort key and no `dir` sets the key's natural
  * direction; a `dir` in the patch is taken as given, and the same key keeps its direction; the second level
- * (`thenSort`, `thenDir`) follows the same rule. Everything else comes from the previous state.
+ * (`thenSort`, `thenDir`) follows the same rule, and a second level on the main key is dropped: sorting twice
+ * by one key orders nothing more. Everything else comes from the previous state.
  */
 export function nextGridState(prev: unknown, patch: Readonly<Record<string, unknown>>): GridViewState {
   const next: Record<string, unknown> = {
@@ -152,6 +153,7 @@ export function nextGridState(prev: unknown, patch: Readonly<Record<string, unkn
   if ('thenSort' in patch && !('thenDir' in patch) && state.thenSort !== prevThen) {
     state.thenDir = naturalDir(state.thenSort);
   }
+  if (state.thenSort === state.sort) state.thenSort = DEFAULTS.thenSort;
   return state;
 }
 

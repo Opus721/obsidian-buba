@@ -1,9 +1,10 @@
 // First lines of MD and TXT files on tiles: the file start is the first 8 KB via `Range` from byte 0, like
-// the PSD start (`head.ts`); cleanup is in core (src/core/format/excerpt.ts). Note text is file content, and
-// only pixels go to the preview database, so first lines live only in this run's memory. Reads go through a
-// bounded queue, like preview builds, and arrivals are announced in batches at most once per frame: when
-// every read was its own `fetch` without a queue and called the grid separately, the median frame took 33 ms
-// instead of 16.7 (measured).
+// the PSD start (`head.ts`), 64 KB when 8 KB give no text, the vault's `cachedRead` when the URL fails;
+// cleanup is in core (src/core/format/excerpt.ts). Note text is file content, and only pixels go to the
+// preview database, so first lines live only in this run's memory. Reads go through a bounded queue, like
+// preview builds, and arrivals are announced in batches at most once per frame: when every read was its own
+// `fetch` without a queue and called the grid separately, the median frame took 33 ms instead of 16.7
+// (measured).
 import { Platform, type Plugin } from 'obsidian';
 import { excerptOf } from '../../core/format/excerpt.ts';
 import { readHead, type Fetcher } from './head.ts';
@@ -11,6 +12,16 @@ import { excerptable, isStale, phoneReadsHead, PreviewQueue, UNNAMED, type Stamp
 
 /** How many bytes of the file start are read. */
 export const EXCERPT_HEAD = 8 * 1024;
+/**
+ * A longer start, read once when the first `EXCERPT_HEAD` bytes clean to nothing: a web clip can open with
+ * long properties or a run of pictures, and its text starts further down.
+ */
+export const EXCERPT_MORE = 64 * 1024;
+/**
+ * A file the file URL could not give is read through the vault (`cachedRead`, as Obsidian reads notes) up to
+ * this size; a bigger one keeps its icon.
+ */
+export const EXCERPT_VAULT_MAX = 4 * 1024 * 1024;
 /** How many texts to keep in memory; fewer on phones, as for previews (`device-previews.ts`). */
 export const EXCERPT_MEMORY = 2000;
 export const PHONE_EXCERPT_MEMORY = 500;
@@ -31,8 +42,8 @@ export interface ExcerptStore {
 export interface ExcerptHost {
   /** The file at the path if it can have first lines, otherwise `null`. */
   file(path: string): { readonly extension: string; readonly stat: Stamp } | null;
-  /** The file start; throws on failure. */
-  read(path: string): Promise<Uint8Array>;
+  /** At most `limit` bytes of the file start; throws on failure. */
+  read(path: string, limit: number): Promise<Uint8Array>;
   /** Calls `run` on the next frame. */
   frame(run: () => void): void;
 }
@@ -103,7 +114,10 @@ export class Excerpts implements ExcerptStore {
     const stamp: Stamp = { mtime: file.stat.mtime, size: file.stat.size };
     let text: string;
     try {
-      text = excerptOf(await this.#host.read(path), file.extension);
+      const head = await this.#host.read(path, EXCERPT_HEAD);
+      text = excerptOf(head, file.extension);
+      if (text === '' && head.length >= EXCERPT_HEAD && file.stat.size > head.length)
+        text = excerptOf(await this.#host.read(path, EXCERPT_MORE), file.extension);
     } catch {
       this.#failed.set(path, stamp);
       return;
@@ -182,12 +196,19 @@ export function excerptStore(plugin: Plugin): ExcerptStore {
   const store = new Excerpts(
     {
       file: fileOf,
-      read: async (path) => {
+      read: async (path, limit) => {
         const file = fileOf(path);
         if (!file) throw new Error('no file');
-        if (Platform.isIosApp && !phoneReadsHead(file.stat.size, await (ranged ??= probe())))
-          throw new Error('file URL on iPhone ignores Range — a file over 64 MB is not read');
-        return (await readHead(fetchFile, vault.getResourcePath(file), EXCERPT_HEAD, file.stat.size)).bytes;
+        try {
+          if (Platform.isIosApp && !phoneReadsHead(file.stat.size, await (ranged ??= probe())))
+            throw new Error('file URL on iPhone ignores Range — a file over 64 MB is not read');
+          return (await readHead(fetchFile, vault.getResourcePath(file), limit, file.stat.size)).bytes;
+        } catch (error) {
+          // A file URL may not answer (measured: every note, Obsidian 1.14.4 on Linux without a sandbox): the vault
+          // reads the note the way Obsidian does.
+          if (file.stat.size > EXCERPT_VAULT_MAX || typeof vault.cachedRead !== 'function') throw error;
+          return new TextEncoder().encode(await vault.cachedRead(file)).subarray(0, limit);
+        }
       },
       frame: (run) => void window.requestAnimationFrame(run),
     },

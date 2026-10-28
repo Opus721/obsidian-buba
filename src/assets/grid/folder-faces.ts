@@ -1,11 +1,12 @@
 // Folder tile faces for the grid (tiles.ts `FolderFace`): the folder's look from storage, as the Buba tree
 // shows it (its icon, color and contrast classes), and the picture of the tile. The picture is the cover when
-// its file is in the vault; without a cover, a folder with its own color or icon shows that look, like its tree
-// row; a plain folder shows its first picture: the image added last among its own files, as the grid's
-// default sort ("Date added", newest first) puts it first, else among files in its subfolders; only when it
-// has no images, a video frame the same way; an empty folder shows the grey icon. `peeks` are the files that
+// its file is in the vault; without a cover the folder is empty in its look, like its tree row. Only with
+// "Cover from contents" (`folderAutoCover`) a plain folder without a cover shows its first picture: the image
+// added last among its own files, as the grid's default sort ("Date added", newest first) puts it first, else
+// among files in its subfolders; only when it has no images, a video frame the same way. `peeks` are the files that
 // lie in the "with files inside" folder: up to three newest, own first, then from subfolders, images before
-// video frames, then other files (documents show as pages). Faces are cached per grid
+// video frames, then other files (documents show as pages). With "One picture, the cover" (`one`) the folder
+// holds a single card and no picture of its own: its cover, else the first of those files. Faces are cached per grid
 // view and dropped whole by the view on any change: a folder look, a cover file arriving or leaving (sync
 // brings the journal line and the file separately), the file index. No subscriptions here: the view owns
 // them, so they end with it.
@@ -34,12 +35,23 @@ export class FolderFaces {
   readonly #vault: Vault;
   readonly #index: FileIndex;
   readonly #storage: FolderLooks | undefined;
+  readonly #auto: () => boolean;
+  readonly #one: () => boolean;
   readonly #cache = new Map<string, FolderFace>();
 
-  constructor(vault: Vault, index: FileIndex, storage: FolderLooks | undefined) {
+  /** `auto`: the "Cover from contents" setting; `one`: "One picture, the cover"; both read on each build. */
+  constructor(
+    vault: Vault,
+    index: FileIndex,
+    storage: FolderLooks | undefined,
+    auto: () => boolean = () => false,
+    one: () => boolean = () => false,
+  ) {
     this.#vault = vault;
     this.#index = index;
     this.#storage = storage;
+    this.#auto = auto;
+    this.#one = one;
   }
 
   /** The face of folder `path`, from the cache. */
@@ -59,15 +71,26 @@ export class FolderFaces {
     const cover = look.cover === null ? null : coverPath(look.cover);
     const own = look.color !== null || look.icon !== null;
     const covered = cover !== null && this.#vault.getFileByPath(cover) !== null;
+    const peeks = peekFiles(this.#index, path);
+    if (this.#one())
+      return {
+        icon: folderIcon(look.icon, () => true),
+        color: colorCss(look.color),
+        contrast: contrastClasses(look.color),
+        picture: null,
+        cover: false,
+        frame: null,
+        peeks: covered ? [cover] : peeks.slice(0, 1),
+      };
     return {
       // Icons come only from the icon window, which lists the icons Obsidian has.
       icon: folderIcon(look.icon, () => true),
       color: colorCss(look.color),
       contrast: contrastClasses(look.color),
-      picture: covered ? cover : own ? null : firstPicture(this.#index, path),
+      picture: covered ? cover : own || !this.#auto() ? null : firstPicture(this.#index, path),
       cover: covered,
       frame: covered && look.frame !== null ? parseCoverFrame(look.frame) : null,
-      peeks: peekFiles(this.#index, path),
+      peeks,
     };
   }
 }

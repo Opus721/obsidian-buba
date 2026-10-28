@@ -1,4 +1,4 @@
-// "File" panel section (`buba-file`, order 20): for one file the name with rename, the path on one line with
+// "File" panel section (`buba-file`, order 20): for one file the name with rename, the full disk path on one line with
 // a "Copy path" button, size, type and dates; for several files their count and total size. Renaming goes
 // only through `fileManager.renameFile`, so Obsidian updates links to the file. Name, path and type are text
 // only.
@@ -8,6 +8,7 @@ import { Notice, Platform, TextAreaComponent, type App, type TFile } from 'obsid
 import { t } from '../../core/i18n/dict/inspector.ts';
 import { DEFAULT_DATE_LOOK, formatDateTime, type DateLook } from '../../core/inspector/date.ts';
 import { formatSize } from '../../core/inspector/size.ts';
+import { diskPath } from '../../platform/disk-path.ts';
 import { renameRecorded } from '../../platform/files/undo.ts';
 import { obsidianLanguage } from '../../platform/locale.ts';
 import { countFiles, fileType, nameEdited, nameProblem, splitName } from './format.ts';
@@ -160,7 +161,7 @@ function renderOne(
   resize?.observe(nameEl);
 
   const rows = el.createDiv({ cls: 'buba-inspector-rows' });
-  pathRow(rows, file.path, pathTools);
+  pathRow(rows, diskPath(app, file.path), pathTools);
   row(rows, t('labelSize'), formatSize(file.stat.size, obsidianLanguage()));
   row(rows, t('labelType'), fileType(ext));
   row(rows, t('labelCreated'), formatDateTime(file.stat.ctime, obsidianLanguage(), look));

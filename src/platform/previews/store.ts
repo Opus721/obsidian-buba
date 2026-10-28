@@ -7,12 +7,14 @@
 // Obsidian, IndexedDB and building.
 import { openDB, type DBSchema } from 'idb';
 import { Platform, TFile, type App, type Plugin } from 'obsidian';
+import { readComposite } from '../../core/format/psd-composite.ts';
 import { thumbnailScanner } from '../../core/format/thumbnail.ts';
 import { DevicePreviews, PHONE_MEMORY_LIMIT } from './device-previews.ts';
 import { frameTimes, isBlackFrame, seekFrame } from './frame.ts';
 import { readHead, readRange, readThumbnail, type Fetcher } from './head.ts';
 import { PdfPages, type PdfSource } from './pdf.ts';
 import {
+  composited,
   fitSize,
   phoneReadsHead,
   previewBuilds,
@@ -170,7 +172,16 @@ export function previewStore(plugin: Plugin): PreviewStore {
           // update.
           if (Platform.isIosApp && !phoneReadsHead(file.stat.size, await (ranged ??= rangeProbe(plugin))))
             throw new Error('file URL on iPhone ignores Range — a file over 64 MB is not read');
-          return embeddedPreview(vault.getResourcePath(file), file.extension, file.stat.size, type);
+          const src = vault.getResourcePath(file);
+          // A computer reads the merged picture; without one, or when it cannot be read, the thumbnail.
+          if (Platform.isDesktopApp && composited(file.extension)) {
+            const merged = await compositePreview(src, file.stat.size, type).catch((error: unknown) => {
+              console.warn('Buba: PSD picture not read, the thumbnail is used', file.path, error);
+              return null;
+            });
+            if (merged) return merged;
+          }
+          return embeddedPreview(src, file.extension, file.stat.size, type);
         }
         if (kind === 'pdf')
           return pdfPreview(
@@ -306,6 +317,19 @@ function pdfPreview(pages: PdfPages, source: PdfSource, type: string): Promise<B
     const fit = { width: canvas.width, height: canvas.height };
     return { blob: await encode(drawn(canvas, fit), type), width: fit.width, height: fit.height };
   });
+}
+
+/**
+ * Merged PSD or PSB picture, already downscaled by the core reader from the slices it read; drawn and encoded
+ * like any preview. `null` if the file has no usable merged picture.
+ */
+async function compositePreview(src: string, size: number, type: string): Promise<BuiltPreview | null> {
+  const merged = await readComposite((begin, end) => readRange(fetchFile, src, begin, end), size, MAX_SIDE);
+  if (!merged) return null;
+  const context = new OffscreenCanvas(merged.outWidth, merged.outHeight).getContext('2d');
+  if (!context) throw new Error('no 2d OffscreenCanvas context');
+  context.putImageData(new ImageData(merged.pixels, merged.outWidth, merged.outHeight), 0, 0);
+  return { blob: await encode(context, type), width: merged.width, height: merged.height };
 }
 
 /**

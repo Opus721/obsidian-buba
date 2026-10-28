@@ -1,8 +1,9 @@
 // The "asset management" module: the Buba tree on the left, the grid view in the center, the "Open Buba" and
 // "All files" commands, and "Open in Buba" in the folder menu. Other modules connect to the grid and the tree
 // through `assets`, each with its own `register…` line below.
-import { TFile, TFolder, type Events, type Plugin } from 'obsidian';
+import { Platform, TFile, TFolder, type Events, type Menu, type PaneType, type Plugin } from 'obsidian';
 import { REVEAL_IN_TREE, SHOW_IN_FOLDER, VIEW_FILES } from '../core/inspector/events.ts';
+import { FOLDER_MENU, TILE_MENU } from '../core/layout/grid-events.ts';
 import { nextGridState } from '../core/layout/view-state.ts';
 import { t } from '../core/i18n/dict/platform.ts';
 import { hotkeysOf } from '../core/settings/hotkeys.ts';
@@ -17,9 +18,10 @@ import { GRID_VIEW_TYPE, GridView } from './grid/view.ts';
 import { registerMobile } from './mobile/index.ts';
 import { registerSettings } from './settings/index.ts';
 import { registerTags } from './tags/index.ts';
+import { registerBookmarks } from './tree/bookmarks.ts';
 import { registerTree } from './tree/register.ts';
 import { TREE_VIEW_TYPE, TreeView } from './tree/view.ts';
-import { openViewer, opensInObsidian } from './viewer/viewer.ts';
+import { openViewer, opensInDefaultApp, opensInObsidian, opensInTab } from './viewer/viewer.ts';
 
 export function registerAssets(plugin: Plugin): void {
   // The preview store starts at load, like Obsidian's metadata cache: entries follow renames and deletions
@@ -32,7 +34,7 @@ export function registerAssets(plugin: Plugin): void {
         .getLeavesOfType(GRID_VIEW_TYPE)
         .map((leaf) => leaf.view)
         .filter((view) => view instanceof GridView),
-    openGrid: (patch) => openGrid(plugin, patch),
+    openGrid: (patch, newTab) => openGrid(plugin, patch, newTab),
   });
   plugin.registerView(TREE_VIEW_TYPE, (leaf) => new TreeView(leaf, plugin, assets));
   plugin.registerView(GRID_VIEW_TYPE, (leaf) => new GridView(leaf, plugin, assets));
@@ -47,6 +49,35 @@ export function registerAssets(plugin: Plugin): void {
     name: t('commandAllFiles'),
     callback: () => void openGrid(plugin, null),
   });
+  // "Open in new tab" first in the menu of one tile and of a Buba tree folder, as Obsidian's file explorer has it
+  // in its own menu (`onFileContextMenu`, section `open` first); the explorer's menu has it already. These
+  // events come before `file-menu`, and this module subscribes before the others, so the section comes first.
+  const openInNewTab = (menu: Menu, file: unknown): void => {
+    if (!(file instanceof TFolder || (file instanceof TFile && opensInTab(file)))) return;
+    menu.addItem((item) =>
+      item
+        .setTitle(t('openInNewTab'))
+        .setIcon('lucide-file-plus')
+        .setSection('open')
+        .onClick(() => {
+          if (file instanceof TFolder) void openGrid(plugin, file.path, true);
+          else void plugin.app.workspace.getLeaf('tab').openFile(file);
+        }),
+    );
+  };
+  const events = plugin.app.workspace as Events;
+  plugin.registerEvent(
+    events.on(TILE_MENU, (...data: unknown[]) => {
+      const [menu, files] = data as [Menu, unknown];
+      if (Array.isArray(files) && files.length === 1) openInNewTab(menu, files[0]);
+    }),
+  );
+  plugin.registerEvent(
+    events.on(FOLDER_MENU, (...data: unknown[]) => {
+      const [menu, folder] = data as [Menu, unknown];
+      openInNewTab(menu, folder);
+    }),
+  );
   plugin.registerEvent(
     plugin.app.workspace.on('file-menu', (menu, file, source) => {
       // Not in the Buba tree's own menu: a click there already opens the folder.
@@ -61,6 +92,7 @@ export function registerAssets(plugin: Plugin): void {
   );
   registerOpenEvents(plugin);
   registerTree(plugin, assets);
+  registerBookmarks(plugin, assets);
   registerGridSources(plugin, assets);
   registerSortKeys(plugin, assets);
   registerTags(plugin, assets);
@@ -74,7 +106,7 @@ export function registerAssets(plugin: Plugin): void {
 
 /**
  * Files opened from another module (the generation section of the file panel): a file the way a grid tile
- * opens it, or shown in its folder in the grid, selected.
+ * opens it on a double click, or shown in its folder in the grid, selected.
  */
 function registerOpenEvents(plugin: Plugin): void {
   const { vault, workspace } = plugin.app;
@@ -83,8 +115,11 @@ function registerOpenEvents(plugin: Plugin): void {
       if (!Array.isArray(paths) || typeof index !== 'number') return;
       const file = vault.getFileByPath(String(paths[index]));
       if (!file) return;
-      if (newTab === true || opensInObsidian(file)) {
-        void workspace.getLeaf(newTab === true ? 'tab' : false).openFile(file);
+      // On a computer a file with no view anywhere (PSD, Word, archives) goes straight to its default app, as on
+      // a double click on its tile (viewer/open.ts): no viewer screen with a button in between.
+      const direct = Platform.isDesktopApp && opensInDefaultApp(file, file.name);
+      if (newTab === true || opensInObsidian(file) || direct) {
+        void workspace.getLeaf(newTab === true && !direct ? 'tab' : false).openFile(file);
         return;
       }
       // The viewer pages through the files it shows; notes and audio among them open on their own.
@@ -134,14 +169,29 @@ let queue: Promise<void> = Promise.resolve();
  * the folder: `null` is "All files", `'/'` the root. Calls run one at a time: Obsidian silently drops a
  * second `setViewState` on a leaf while the first is still running.
  */
-export function openGrid(plugin: Plugin, target: string | null | GridStatePatch): Promise<void> {
+export function openGrid(
+  plugin: Plugin,
+  target: string | null | GridStatePatch,
+  newTab: boolean | PaneType = false,
+): Promise<void> {
   const patch = typeof target === 'string' || target === null ? { folder: target } : target;
   const run = async (): Promise<void> => {
     const { workspace } = plugin.app;
-    const leaf = workspace.getLeavesOfType(GRID_VIEW_TYPE)[0] ?? workspace.getLeaf('tab');
-    const state = { ...nextGridState(leaf.getViewState().state, patch) };
+    // A new tab (or, as `Keymap.isModEvent` gives it, a split or a window) starts from the place alone, as one
+    // opened from the path above a note (breadcrumbs.ts); the grid puts the place's own look on it.
+    const leaf = newTab
+      ? workspace.getLeaf(newTab === true ? 'tab' : newTab)
+      : (workspace.getLeavesOfType(GRID_VIEW_TYPE)[0] ?? workspace.getLeaf('tab'));
+    const state = { ...nextGridState(newTab ? {} : leaf.getViewState().state, patch) };
     await leaf.setViewState({ type: GRID_VIEW_TYPE, state, active: true });
     await workspace.revealLeaf(leaf);
+    // Grid keys (Ctrl+A, Ctrl+C, Ctrl+V, Space) listen in the grid body: a folder opened from the tree takes
+    // them at once, without a click on the tiles first (word of the owner 27.10). Delete stays the tree's
+    // after a click on its row (tree/view.ts). Not on a phone: there is no keyboard to serve.
+    if (!Platform.isMobile)
+      leaf.view?.containerEl
+        ?.querySelector<HTMLElement>('.buba-grid-scroller')
+        ?.focus({ preventScroll: true });
   };
   queue = queue.then(run, run);
   return queue;

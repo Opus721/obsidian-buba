@@ -3,12 +3,13 @@
 // create, Esc does nothing. The name rule is in src/core/actions/new-folder.ts; a refusal shows a notice and
 // the dialog stays. Creation uses the public `vault.createFolder`: Obsidian's ready-made "create Untitled
 // folder" and free-name lookup are internal. Its failure ("Folder already exists.", e.g. "Lamp" and "lamp"
-// are one name on Windows) becomes a clear notice and no folder. The "+ New folder" row at the bottom of the
+// are one name on Windows) becomes a clear notice and no folder. A new folder is an undo step. The "+ New folder" row at the bottom of the
 // tree matches "+ New tag" under the tags (tag-list.ts): a plus in the icon cell and the name in muted text
 // via Obsidian's `u-muted` class, no CSS of our own.
 import { Notice, setIcon, type App, type Menu } from 'obsidian';
 import { newFolderTarget, ROOT, untitledFolderName } from '../../core/actions/new-folder.ts';
 import { t } from '../../core/i18n/dict/tree.ts';
+import { recordCreated } from '../../platform/files/undo.ts';
 import { NameModal } from '../tags/group-modals.ts';
 
 /** Names of everything in folder `parent`, files and folders: on disk they share one namespace. */
@@ -49,6 +50,7 @@ async function create(app: App, path: string, name: string, created: (path: stri
     new Notice(taken ? t('folderNameTaken', { name }) : t('folderCreateFailed', { name }));
     return;
   }
+  recordCreated(app, 'folder', '', [path]);
   created(path);
 }
 

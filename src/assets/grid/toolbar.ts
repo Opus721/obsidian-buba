@@ -6,6 +6,7 @@ import {
   ExtraButtonComponent,
   Menu,
   Modal,
+  type MenuItem,
   SliderComponent,
   setTooltip,
   type App,
@@ -19,6 +20,7 @@ import {
   TILE_SIZE_DEFAULT,
   TILE_SIZE_MAX,
   TILE_SIZE_MIN,
+  nextGridState,
   type GridViewState,
 } from '../../core/layout/view-state.ts';
 import type { BubaAssets } from '../api.ts';
@@ -291,13 +293,21 @@ function renderPath(bar: Toolbar, title: string | null, vaultName: string): void
  * View items: the view header's "More" (⋮) menu on a phone and the "View" button menu above the grid on
  * desktop share one list. The selected item has a check, each group is its own section under its own header.
  * Sort keys come from the registry in registration order, in two levels: "Sort by" and "Then by" with "None"
- * first; a level's direction is in its section below the keys, the second level's only when a key is chosen.
- * Section headers are `menuLabel`, without the "Buba" label (menu-title.ts). On a phone "File type…" is in
- * the "Folder" section and "Tile size…" in "Tiles"; tile size is a window with the toolbar slider, only where
- * there is no slider above the grid (`slider`), since Obsidian menu items have neither sliders nor submenus;
- * "File type…" opens the same checkbox window as the funnel. The menu is built on every opening, so checks
- * follow the current state; items change it only through setGridState. `mixed`: a mixed menu that also has
- * Obsidian items (⋮), where our items get the "Buba" label; the "View" menu has none.
+ * first; a level's direction is in its section below the keys. Section headers are `menuLabel`, without the
+ * "Buba" label (menu-title.ts). On a phone "File type…" is in the "Folder" section and "Tile size…" in
+ * "Tiles"; tile size is a window with the toolbar slider, only where there is no slider above the grid
+ * (`slider`), since Obsidian menu items have neither sliders nor submenus; "File type…" opens the same
+ * checkbox window as the funnel. The menu is built on every opening, so checks follow the current state;
+ * items change it only through setGridState. `mixed`: a mixed menu that also has Obsidian items (⋮), where
+ * our items get the "Buba" label; the "View" menu has none.
+ *
+ * Obsidian closes a menu after any item: its handler calls the item's callback, then `menu.hide()`, in the
+ * same task (app.js 1.14.4, measured on Android 28.10). These items only change how the grid looks, and one
+ * often sets several in a row: "Sort by", then "Then by" and its direction (word of the owner 28.10 08:40).
+ * So they keep the menu open (`keepOpen`) and move their checks in place (`setChecked` redraws a shown
+ * item); a press outside, Back, "File type…", "Tile size…" and the other items close it as before. The rows
+ * do not change while the menu is open: the main key under "Then by", the second level's direction without a
+ * key and the "Tiles" settings of another layout are greyed out rather than left out.
  */
 export function paneMenu(
   menu: Menu,
@@ -309,49 +319,131 @@ export function paneMenu(
   mixed = false,
 ): void {
   const own = (title: string) => (mixed ? ownTitle(title) : title);
-  const item = (section: string, title: string, checked: boolean | null, run: () => void, icon?: IconName) =>
+  const stay = keepOpen(menu);
+  // The state as the open menu has set it, for the checks.
+  let now = state;
+  const marks: {
+    item: MenuItem;
+    checked: (at: GridViewState) => boolean;
+    off?: (at: GridViewState) => boolean;
+  }[] = [];
+  const view = (
+    section: string,
+    title: string,
+    checked: (at: GridViewState) => boolean,
+    patch: (at: GridViewState) => Partial<GridViewState>,
+    icon?: IconName,
+    off?: (at: GridViewState) => boolean,
+  ) =>
     menu.addItem((it) => {
-      it.setSection(`buba-grid-${section}`).setTitle(own(title)).setChecked(checked).onClick(run);
+      it.setSection(`buba-grid-${section}`)
+        .setTitle(own(title))
+        .setChecked(checked(now) && !off?.(now))
+        .setDisabled(off?.(now) ?? false)
+        .onClick(() => {
+          const change = patch(now);
+          // As the grid takes it: a new sort key brings its natural direction.
+          now = nextGridState(now, change);
+          stay();
+          setGridState(change);
+          for (const mark of marks) {
+            const disabled = mark.off?.(now) ?? false;
+            mark.item.setChecked(mark.checked(now) && !disabled);
+            if (mark.off) mark.item.setDisabled(disabled);
+          }
+        });
       if (icon) it.setIcon(icon);
+      marks.push({ item: it, checked, ...(off && { off }) });
     });
-  const set = (patch: Partial<GridViewState>) => () => setGridState(patch);
+  const action = (section: string, title: string, run: () => void) =>
+    menu.addItem((it) =>
+      it.setSection(`buba-grid-${section}`).setTitle(own(title)).setChecked(null).onClick(run),
+    );
   const label = (section: string, title: string) =>
     menu.addItem((it) => it.setSection(`buba-grid-${section}`).setTitle(menuLabel(title)).setIsLabel(true));
   const deep = ctx.sourceTitle() === null && state.folder !== null;
   if (deep || !slider) label('folder', t('menuFolder'));
-  if (deep) item('folder', t('includeSubfolders'), state.deep, set({ deep: !state.deep }));
-  if (!slider) item('folder', t('fileTypeItem'), null, () => openTypeWindow(app, ctx.types));
+  if (deep)
+    view(
+      'folder',
+      t('includeSubfolders'),
+      (at) => at.deep,
+      (at) => ({ deep: !at.deep }),
+    );
+  if (!slider) action('folder', t('fileTypeItem'), () => openTypeWindow(app, ctx.types));
   const keys = ctx.assets.sortKeys();
-  const selected = keys.some((key) => key.id === state.sort) ? state.sort : FALLBACK_SORT;
+  const sortOf = (at: GridViewState) => (keys.some((key) => key.id === at.sort) ? at.sort : FALLBACK_SORT);
   label('sort', t('menuSortBy'));
-  for (const key of keys) item('sort', key.title, key.id === selected, set({ sort: key.id }));
-  for (const dir of ['asc', 'desc'] as const) {
-    item('sort', t(DIRS[dir].title), state.dir === dir, set({ dir }), DIRS[dir].icon);
-  }
-  const then = keys.some((key) => key.id === state.thenSort) ? state.thenSort : THEN_NONE;
+  for (const key of keys)
+    view(
+      'sort',
+      key.title,
+      (at) => sortOf(at) === key.id,
+      () => ({ sort: key.id }),
+    );
+  for (const dir of ['asc', 'desc'] as const)
+    view(
+      'sort',
+      t(DIRS[dir].title),
+      (at) => at.dir === dir,
+      () => ({ dir }),
+      DIRS[dir].icon,
+    );
+  const thenOf = (at: GridViewState) =>
+    keys.some((key) => key.id === at.thenSort) ? at.thenSort : THEN_NONE;
   label('then', t('menuThenBy'));
-  item('then', t('thenNone'), then === THEN_NONE, set({ thenSort: THEN_NONE }));
-  for (const key of keys) item('then', key.title, key.id === then, set({ thenSort: key.id }));
-  if (then !== THEN_NONE) {
-    for (const dir of ['asc', 'desc'] as const) {
-      item('then', t(DIRS[dir].title), state.thenDir === dir, set({ thenDir: dir }), DIRS[dir].icon);
-    }
-  }
+  view(
+    'then',
+    t('thenNone'),
+    (at) => thenOf(at) === THEN_NONE,
+    () => ({ thenSort: THEN_NONE }),
+  );
+  for (const key of keys)
+    view(
+      'then',
+      key.title,
+      (at) => thenOf(at) === key.id,
+      () => ({ thenSort: key.id }),
+      undefined,
+      (at) => sortOf(at) === key.id,
+    );
+  for (const dir of ['asc', 'desc'] as const)
+    view(
+      'then',
+      t(DIRS[dir].title),
+      (at) => at.thenDir === dir,
+      () => ({ thenDir: dir }),
+      DIRS[dir].icon,
+      (at) => thenOf(at) === THEN_NONE,
+    );
   label('layout', t('menuLayout'));
-  for (const layout of ['uniform', 'justified', 'waterfall'] as const) {
-    item('layout', t(LAYOUTS[layout]), state.layout === layout, set({ layout }));
-  }
-  // Only "Tiles" has a setting of its own, fit; Justified and "Columns" get no section or header, so two
-  // headers never follow each other.
-  if (state.layout === 'uniform') {
-    label('fit', t('uniformSettings'));
-    for (const fit of ['contain', 'cover'] as const)
-      item('fit', t(FITS[fit]), state.fit === fit, set({ fit }));
-  }
+  for (const layout of ['uniform', 'justified', 'waterfall'] as const)
+    view(
+      'layout',
+      t(LAYOUTS[layout]),
+      (at) => at.layout === layout,
+      () => ({ layout }),
+    );
+  // Only "Tiles" has a setting of its own, fit.
+  label('fit', t('uniformSettings'));
+  for (const fit of ['contain', 'cover'] as const)
+    view(
+      'fit',
+      t(FITS[fit]),
+      (at) => at.fit === fit,
+      () => ({ fit }),
+      undefined,
+      (at) => at.layout !== 'uniform',
+    );
   label('names', t('menuAllViews'));
-  item('names', t('showFileNames'), state.showNames, set({ showNames: !state.showNames }));
+  view(
+    'names',
+    t('showFileNames'),
+    (at) => at.showNames,
+    (at) => ({ showNames: !at.showNames }),
+  );
   if (slider) return;
-  item('names', t('tileSizeItem'), null, () => {
+  action('names', t('tileSizeItem'), () => {
     // The window row is the slider followed by "Standard tile size", as in the desktop row above the grid.
     const modal = new Modal(app).setTitle(t('tileSize'));
     const standard = standardSizeOf(ctx.assets);
@@ -371,6 +463,25 @@ export function paneMenu(
     });
     modal.open();
   });
+}
+
+/**
+ * Lets `menu` skip the one hide Obsidian calls right after an item's callback (see `paneMenu`): call the
+ * returned function inside the callback. The skip ends with the task, so a callback that does not lead to a
+ * hide leaves the next press outside closing the menu.
+ */
+function keepOpen(menu: Menu): () => void {
+  let keep = false;
+  const hide = menu.hide.bind(menu);
+  menu.hide = () => {
+    if (!keep) return hide();
+    keep = false;
+    return menu;
+  };
+  return () => {
+    keep = true;
+    queueMicrotask(() => (keep = false));
+  };
 }
 
 /**

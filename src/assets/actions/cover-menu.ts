@@ -2,10 +2,12 @@
 // `view` like the tree's "Folder color…" and "Folder icon…": on a folder tile "Upload cover…" (the system
 // file picker, images only; on iPhone the Photos library arrives as JPEG) and, while it has one, "Move cover"
 // (drag and zoom it in the tile, cover-frame.ts), "Center cover" once it was moved and "Remove cover"; a new or
-// removed cover starts in the middle again. On an image tile "Make folder cover" for the folder the image lies in. Only one tile: a menu for
-// several files has no cover items. The tree shows no covers and its menu has no cover items. The cover file is
-// written first (src/platform/covers.ts), then the storage line; the cover it replaces goes to the trash once
-// no folder names it. Without storage (journals failed to load) there are no cover items.
+// removed cover starts in the middle again. With "One picture, the cover" the cover stands whole in its own
+// proportions, so there is nothing to move: no "Move cover" and "Center cover". On an image tile "Make folder
+// cover" for the folder the image lies in. Only one tile: a menu for several files has no cover items. The
+// tree shows no covers and its menu has no cover items. The cover file is written first
+// (src/platform/covers.ts), then the storage line; the cover it replaces goes to the trash once no folder names
+// it. Without storage (journals failed to load) there are no cover items.
 import {
   Notice,
   Platform,
@@ -23,6 +25,7 @@ import { trashCover, vaultPicture, writeCover } from '../../platform/covers.ts';
 import { pickFiles } from '../../platform/files/pick.ts';
 import { ownTitle } from '../../platform/menu-title.ts';
 import { previewKind } from '../../platform/previews/plan.ts';
+import { settingsOf } from '../../platform/settings.ts';
 import type { BubaAssets } from '../api.ts';
 import { MENU_SOURCE } from './file-menu.ts';
 
@@ -40,7 +43,7 @@ export function registerCoverMenu(plugin: Plugin, assets: BubaAssets): void {
   plugin.registerEvent(
     app.workspace.on('file-menu', (menu: Menu, file: TAbstractFile, source: string) => {
       if (source !== MENU_SOURCE) return;
-      if (file instanceof TFolder && !file.isRoot()) folderItems(app, assets, storage, menu, file);
+      if (file instanceof TFolder && !file.isRoot()) folderItems(plugin, assets, storage, menu, file);
       else if (
         file instanceof TFile &&
         previewKind(file.extension) === 'image' &&
@@ -52,7 +55,14 @@ export function registerCoverMenu(plugin: Plugin, assets: BubaAssets): void {
   );
 }
 
-function folderItems(app: App, assets: BubaAssets, storage: FolderLooks, menu: Menu, folder: TFolder): void {
+function folderItems(
+  plugin: Plugin,
+  assets: BubaAssets,
+  storage: FolderLooks,
+  menu: Menu,
+  folder: TFolder,
+): void {
+  const { app } = plugin;
   menu.addItem((item) =>
     item
       .setSection('view')
@@ -67,6 +77,7 @@ function folderItems(app: App, assets: BubaAssets, storage: FolderLooks, menu: M
   );
   const look = storage.folderLook(folder.path);
   if (look.cover === null) return;
+  if (settingsOf(plugin).folderTile === 'one') return removeItem(app, storage, menu, folder);
   // "Move cover" works in the grid that shows the tile: the first open grid that has it.
   menu.addItem((item) =>
     item
@@ -83,6 +94,10 @@ function folderItems(app: App, assets: BubaAssets, storage: FolderLooks, menu: M
         .setIcon('scan')
         .onClick(() => void storage.setFolderFrame(folder.path, null).catch(() => undefined)),
     );
+  removeItem(app, storage, menu, folder);
+}
+
+function removeItem(app: App, storage: FolderLooks, menu: Menu, folder: TFolder): void {
   menu.addItem((item) =>
     item
       .setSection('view')

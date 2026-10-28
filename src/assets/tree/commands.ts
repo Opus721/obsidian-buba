@@ -19,6 +19,10 @@ import { newFolder, TREE_VIEW_TYPE, TreeView } from './view.ts';
 const ORDER_NAMES = {
   alphabetical: ['tree-order-alphabetical', 'commandOrderAlphabetical'],
   alphabeticalReverse: ['tree-order-alphabetical-reverse', 'commandOrderAlphabeticalReverse'],
+  byModifiedTime: ['tree-order-modified', 'commandOrderModified'],
+  byModifiedTimeReverse: ['tree-order-modified-reverse', 'commandOrderModifiedReverse'],
+  byCreatedTime: ['tree-order-created', 'commandOrderCreated'],
+  byCreatedTimeReverse: ['tree-order-created-reverse', 'commandOrderCreatedReverse'],
 } as const satisfies Readonly<Record<FolderOrder, readonly [id: string, name: string]>>;
 
 const NEW_FOLDER = [

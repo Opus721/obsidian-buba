@@ -1,0 +1,60 @@
+/* Phone arrows over a file the grid opened in Obsidian's own view (pager.ts): the viewer's round arrows
+   (viewer.css, the variables of `body.is-phone`) at mid-height of the view, over its content. A tap on the file
+   hides them (`is-hidden`). */
+.is-phone .workspace-leaf-content:has(> .buba-pager) {
+  position: relative;
+}
+
+.is-phone .buba-pager.is-hidden {
+  display: none;
+}
+
+.is-phone .buba-pager > .buba-pager-nav {
+  position: absolute;
+  z-index: var(--layer-cover);
+  top: round(calc(var(--buba-nav-y) - var(--buba-nav-size) / 2), 1px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: var(--buba-nav-size);
+  height: var(--buba-nav-size);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
+  color: var(--text-normal);
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--text-normal) var(--buba-add-bg), var(--background-primary)) var(--buba-nav-fill),
+    transparent
+  );
+  -webkit-backdrop-filter: var(--raised-blur);
+  backdrop-filter: var(--raised-blur);
+  --icon-size: var(--buba-nav-icon);
+  --icon-stroke: var(--icon-l-stroke-width);
+}
+
+.is-phone .buba-pager > .buba-pager-nav > svg {
+  flex: none;
+  margin-top: round(down, calc((var(--buba-nav-size) - var(--buba-nav-icon)) / 2), 1px);
+  margin-left: round(down, calc((var(--buba-nav-size) - var(--buba-nav-icon)) / 2), 1px);
+}
+
+.is-phone .buba-pager > .buba-pager-nav.mod-prev {
+  inset-inline-start: calc(
+    max(var(--buba-nav-side), var(--safe-area-inset-left), var(--safe-area-inset-right)) -
+      var(--safe-area-inset-left)
+  );
+}
+
+.is-phone .buba-pager > .buba-pager-nav.mod-next {
+  inset-inline-end: calc(
+    max(var(--buba-nav-side), var(--safe-area-inset-left), var(--safe-area-inset-right)) -
+      var(--safe-area-inset-right)
+  );
+}
+
+body:not(.is-phone) .buba-pager {
+  display: none;
+}
