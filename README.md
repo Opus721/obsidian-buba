@@ -6,31 +6,37 @@ Buba turns the folders of your vault into a visual asset library. Every file sho
 
 ## Browse your folders
 
-- **A grid of previews for any folder**: one folder, a folder with its subfolders, every file with a tag, or all files at once. Go back and forward through visited folders like in a browser.
+- **A grid of previews for any folder**: one folder, a folder with its subfolders, every file with a tag, your bookmarks, or all files at once. Go back and forward through visited folders like in a browser.
+- **Tabs, as in Obsidian's file explorer**: the middle mouse button or "Open in new tab" opens a folder, tag or file in a new tab, and each Buba tab is titled by what it shows.
 - **Three layouts**: Grid with even tiles, Justified rows and Columns, with a tile size slider and file names on or off.
-- **Sorting by two keys**, for example by rating and then by date, and a file type filter.
+- **Sorting by two keys**, for example by rating and then by date, or by type to keep files of one kind together, and a file type filter.
 - **Each folder can keep its own view**, or all folders share one.
-- **Previews for many formats**: PNG, JPG, GIF, WebP and other images, videos, the first page of a PDF, the embedded preview of PSD, PSB and AI files, the beginning of Markdown and text notes. Other files get a format badge.
+- **Previews for many formats**: PNG, JPG, GIF, WebP and other images, videos, the first page of a PDF, the full picture of PSD and PSB files, the embedded preview of AI files, the beginning of Markdown and text notes. Other files get a format badge.
 
 ![Switching the grid between the Grid, Justified and Columns layouts and changing the tile size](docs/readme/layouts.gif)
 
 ## Folders with covers
 
-- **Folder tiles look like folders**: a slanted front with a few of the folder's files peeking out of it, which fan out when you point at the folder on a computer.
+- **Folder tiles look like folders**: a glass front with the folder's cover standing inside, and more of its files fanning out when you point at the folder on a computer.
 - **Give a folder a cover** to turn it into a board of references: right-click the tile and upload a picture, or make any picture in the folder its cover. Move and zoom the cover to frame it. Covers are stored in Buba's own data, never among your files, and follow the folder when you rename or move it.
-- **Without a cover** a folder shows its own icon and color, as in the tree, or its newest picture.
-- **Choose the look** in Buba's settings: the cover on the front or behind a glass front, files inside or not, and how a selected folder is marked.
+- **Without a cover** a folder shows its own icon and color, as in the tree. Turn on "Cover from contents" in Buba's settings to show its newest picture instead.
+- **Choose the look** in Buba's settings: one picture as the cover, a few files inside or none, the cover in front or behind the glass, and how a selected folder is marked.
 
-![Folder tiles in the grid: covers on Boards, Generations and Moodboard, colored Client work and References, files peeking out of each folder, Moodboard selected](docs/readme/folders.png)
+![Folder tiles in the grid: a picture standing in each folder behind its glass front, each folder in its own color, Moodboard selected](docs/readme/folders.png)
 
 ## Organize the tree
 
-- **Folder colours and icons** in the Buba tree, so the folders you use most stand out. A closed folder shows a closed folder icon, an open one an open icon, and on a computer folders open with a short slide.
+- **Folder colours and icons** in the Buba tree, so the folders you use most stand out. A closed folder shows a closed folder icon, an open one an open icon. Click the icon to open or close a folder, or double-click its name; on a computer folders open with a short slide.
+- **Buttons at the top of the tree**: a new folder alongside the open one, a new subfolder, a new tag, the sort order (by name, or by created or modified time) and collapse all.
+- **Bookmarks**: the "Bookmarks" row opens Obsidian's bookmarks as a grid, folders first, so the files you keep coming back to are one click away.
+- **Pick several folders or tags** with Ctrl and Shift to give them one colour or icon, move them or delete them in one go.
 - **Drag a folder onto another folder** to move it inside; the folder under the pointer lights up. Drop it on "All files" to move it to the top level. The open folder stays open at its new place, and Ctrl+Z in the grid moves it back.
-- **Rename and delete folders** right in the tree, from the menu or with the Delete key. Delete asks first, and warns when files inside are references of generations.
-- **Drag a tag onto a tag group** to move it into the group, or onto "All tags" to take it out.
+- **Rename and delete folders** right in the tree, from the menu or with the Delete key. Delete asks first, and warns when files inside are references of generations. Tags and tag groups are deleted the same way.
+- **Drag a tag onto a tag group** to move it into the group, or onto "All tags" to take it out. When the group is exclusive, Buba asks which tag each file keeps.
 
-![Dragging the Exports folder into Client work, then dragging the night tag into the status group](docs/readme/tree.gif)
+![Picking Locations and References with Ctrl, giving both one color from the menu and dragging them into Client work](docs/readme/tree.gif)
+
+![Bookmarks open in the Buba grid: the bookmarked Posters folder first, then two bookmarked pictures](docs/readme/bookmarks.png)
 
 ## Tags, ratings and comments
 
@@ -51,19 +57,24 @@ Buba turns the folders of your vault into a visual asset library. Every file sho
 
 ## Canvas and everyday file work
 
-- **Drag files from the grid onto an Obsidian canvas** to add them as cards. The file panel then lists the canvases a file is on.
-- **Rename, duplicate, move and delete** from the grid, with undo.
+- **Drag files from the grid onto an Obsidian canvas** to add them as cards. The file panel then lists the canvases a file is on, and shows the file you select on a canvas.
+- **Copy, paste and undo as in a file manager**: Ctrl+A selects every tile, Ctrl+C and Ctrl+V copy tiles into another folder, and Ctrl+Z undoes the last Buba action, whatever it was.
+- **Right-click empty space** in the grid to create a folder, note, canvas or base right there, or to paste.
+- **Rename, duplicate, move and delete** from the grid. Moving thousands of files shows its progress and can be stopped.
 - **Drop or paste files from your computer** to add them to the open folder; they stay selected, so they never get lost in the sort order. Drag files from the grid into other apps.
+- **Install fonts** on a computer: right-click a .ttf, .otf or .ttc file, or several, and choose "Install font".
 
-![Dragging two pictures from the Buba grid onto a canvas next to it](docs/readme/canvas.gif)
+![Dragging two pictures from the Buba grid onto a canvas next to it, then clicking a card on the canvas to see its file in the file panel](docs/readme/canvas.gif)
+
+![Picking three tiles, copying them with Ctrl+C and pasting them into Exports with Ctrl+V, then the menu of the grid's empty space with New note, New canvas and New base](docs/readme/copy-paste.gif)
 
 ## On the phone
 
-Buba works in the Obsidian mobile app with the same grid, tree and file panel, laid out for a small screen. Switch between the Buba tree and Obsidian's file explorer at the bottom of the side panel. Menus open with a long press, the file panel is one tap away from the menu, and the viewer moves between files with a swipe.
+Buba works in the Obsidian mobile app with the same grid, tree and file panel, laid out for a small screen. Switch between the Buba tree and Obsidian's file explorer at the bottom of the side panel. Menus open with a long press, the file panel is one tap away from the menu, and the viewer moves between files with a swipe. Files opened from the grid get arrows to the next and previous file, and "Close" brings you back to the grid.
 
-A few things need a computer: video playback on hover, dragging folders, tags and files, dropping files from the file manager. To add files on a phone, share them to Obsidian from another app or use the add items in the grid menu.
+A few things need a computer: video playback on hover, dragging folders, tags and files, dropping files from the file manager, installing fonts. To add files on a phone, share them to Obsidian from another app or use the add items in the grid menu.
 
-![Buba on a phone: the grid, the folder tree in the side panel, the long-press menu of a file and its file panel](docs/readme/phone.png)
+![Buba on a phone: the grid, the folder tree in the side panel, the long-press menu of a file, and a file opened from the grid with arrows to the next one](docs/readme/phone.png)
 
 ## Generation passport
 
@@ -108,7 +119,7 @@ Buba follows the language of Obsidian: English by default, Russian when Obsidian
 
 ## Customize the look
 
-Buba follows your Obsidian theme. With the [Style Settings](https://github.com/mgmeyers/obsidian-style-settings) plugin installed, its settings get a **Buba** section: row spacing in the folder and tag trees, tag sizes, how files without a preview look, the comment badge and the "Buba" label in menus. The phone has its own sliders where it needs other numbers. Without Style Settings nothing changes.
+Buba follows your Obsidian theme, and the [Buba theme](https://github.com/Opus721/obsidian-buba-theme) is made to go with it. With the [Style Settings](https://github.com/mgmeyers/obsidian-style-settings) plugin installed, its settings get a **Buba** section: row spacing in the folder and tag trees, tag sizes, how files without a preview look, the comment badge and the "Buba" label in menus. The phone has its own sliders where it needs other numbers. Without Style Settings nothing changes.
 
 ## Where your data lives
 
