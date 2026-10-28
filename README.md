@@ -62,7 +62,7 @@ Buba turns the folders of your vault into a visual asset library. Every file sho
 - **Right-click empty space** in the grid to create a folder, note, canvas or base right there, or to paste.
 - **Rename, duplicate, move and delete** from the grid. Moving thousands of files shows its progress and can be stopped.
 - **Drop or paste files from your computer** to add them to the open folder; they stay selected, so they never get lost in the sort order. Drag files from the grid into other apps.
-- **Install fonts** on a computer: right-click a .ttf, .otf or .ttc file, or several, and choose "Install font".
+- **Install fonts in batches** on a computer: select .ttf, .otf or .ttc files, as many as you like, right-click and choose "Go to font installation". Buba opens the system's own font window (Fonts in Windows Settings, Font Book on a Mac) and you drag the fonts into it: the system installs them all at once. Buba itself never writes outside your vault or runs commands to do this.
 
 ![Dragging two pictures from the Buba grid onto a canvas next to it, then clicking a card on the canvas to see its file in the file panel](docs/readme/canvas.gif)
 
@@ -132,7 +132,8 @@ Buba follows your Obsidian theme, and the [Buba theme](https://github.com/Opus72
 ## Privacy
 
 - No network requests, no telemetry, no account and no payment.
-- Buba reads files from outside your vault only when you drop, paste or pick them yourself, to copy them into the vault.
+- Buba reads files from outside your vault only when you drop, paste or pick them yourself, to copy them into the vault. It never writes outside your vault and never runs commands on your computer.
+- To drag files out to other apps and to open the system's font window, Buba uses Electron, which Obsidian is built on. That is all it uses beyond Obsidian's plugin API.
 
 ## License
 

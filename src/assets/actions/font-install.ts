@@ -1,21 +1,24 @@
-// "Install font" in the tile menu and the "Install selected fonts" command, like "Install" in Windows
-// Explorer: one font or several selected at once, only when every selected file is a font (.ttf, .otf,
-// .ttc) and only in the desktop app. The item sits in the `buba-file` section through `buba:tile-menu`,
-// after "Make a copy" and "Open in default app", with the "Buba" label. Each file is read and checked in
-// core (its sfnt signature and its name, src/core/actions/font-install.ts) before the system gets it; how
-// the system installs it: src/platform/fonts.ts. The result is one notice: the font's name for one file,
-// counts for several (`fontReport`).
-import { ItemView, Notice, TFile, type Events, type Menu, type Plugin } from 'obsidian';
+// "Go to font installation" in the tile menu and the command of the same name: only when every selected file
+// is a font (.ttf, .otf, .ttc), in the desktop app on Windows or macOS, and when tiles can be dragged out. It
+// opens the system's font window (src/platform/fonts.ts) and, in the middle of Obsidian, a hint: hold Ctrl
+// (Option on a Mac) and drag the fonts into that window. The system installs them, any number at once. The
+// item sits in the `buba-file` section through `buba:tile-menu`, after "Make a copy" and "Open in default
+// app", with the "Buba" label.
 import {
-  FONT_MAX_BYTES,
-  fontPlan,
-  fontReport,
-  isFontExtension,
-  type FontResult,
-} from '../../core/actions/font-install.ts';
+  ButtonComponent,
+  ItemView,
+  Modal,
+  Notice,
+  TFile,
+  type App,
+  type Events,
+  type Menu,
+  type Plugin,
+} from 'obsidian';
+import { fontHint, isFontExtension, type FontSystem } from '../../core/actions/font-install.ts';
 import { t } from '../../core/i18n/dict/actions.ts';
-import { diskPath } from '../../platform/disk-path.ts';
-import { fontInstallAvailable, installFontFiles, type FontJob } from '../../platform/fonts.ts';
+import { dragOutAvailable } from '../../platform/drag-out.ts';
+import { fontSystem, openFontWindow } from '../../platform/fonts.ts';
 import { ownTitle } from '../../platform/menu-title.ts';
 import type { BubaAssets } from '../api.ts';
 import { TILE_MENU } from './file-menu.ts';
@@ -26,8 +29,8 @@ export function registerFontInstall(plugin: Plugin, assets: BubaAssets): void {
     (app.workspace as Events).on(TILE_MENU, (...data: unknown[]) => {
       const [menu, files] = data as [Menu, unknown];
       if (!Array.isArray(files)) return;
-      const fonts = fontsOf(files);
-      if (fonts) addInstallItem(plugin, menu, fonts);
+      const system = installSystem(files);
+      if (system) addInstallItem(app, menu, system);
     }),
   );
   plugin.addCommand({
@@ -38,72 +41,60 @@ export function registerFontInstall(plugin: Plugin, assets: BubaAssets): void {
       const active: unknown = app.workspace.getActiveViewOfType(ItemView);
       const view = assets.gridViews().find((each) => (each as unknown) === active);
       const files = (view?.selectedPaths?.() ?? []).map((path) => app.vault.getAbstractFileByPath(path));
-      const fonts = fontsOf(files);
-      if (!fonts) return false;
-      if (!checking) void installFonts(plugin, fonts);
+      const system = installSystem(files);
+      if (!system) return false;
+      if (!checking) void goToInstall(app, system);
       return true;
     },
   });
 }
 
-/** The files when all of them are fonts and this device can install them; otherwise `null`. */
-function fontsOf(files: readonly unknown[]): TFile[] | null {
-  if (!files.length || !fontInstallAvailable()) return null;
-  const fonts = files.filter(
-    (file): file is TFile => file instanceof TFile && isFontExtension(file.extension),
-  );
-  return fonts.length === files.length ? fonts : null;
+/** The system to install on when all the files are fonts and they can be dragged out; otherwise `null`. */
+function installSystem(files: readonly unknown[]): FontSystem | null {
+  if (!files.length || !dragOutAvailable()) return null;
+  const fonts = files.filter((file) => file instanceof TFile && isFontExtension(file.extension));
+  return fonts.length === files.length ? fontSystem() : null;
 }
 
-function addInstallItem(plugin: Plugin, menu: Menu, fonts: readonly TFile[]): void {
-  const title = fonts.length === 1 ? t('installFont') : t('installFonts', { count: fonts.length });
+function addInstallItem(app: App, menu: Menu, system: FontSystem): void {
   menu.addItem((item) =>
     item
-      .setTitle(ownTitle(title))
+      .setTitle(ownTitle(t('goToFontInstall')))
       .setIcon('type')
       .setSection('buba-file')
-      .onClick(() => void installFonts(plugin, fonts)),
+      .onClick(() => void goToInstall(app, system)),
   );
 }
 
-/** Reads and checks each file, installs the fonts in one batch, reports in one notice. */
-/** A full disk path: `C:\…`, `C:/…`, `\\server\…` or `/…`. */
-const ABSOLUTE_PATH = /^(?:[A-Za-z]:[\\/]|\\\\|\/)/;
+/** Opens the system's font window and the hint; a notice when the window did not open. */
+async function goToInstall(app: App, system: FontSystem): Promise<void> {
+  if (await openFontWindow(system)) new FontHintModal(app, system).open();
+  else new Notice(t('fontWindowFailed'));
+}
 
-export async function installFonts(plugin: Plugin, files: readonly TFile[]): Promise<void> {
-  const { app } = plugin;
-  const progress = new Notice(t('fontsInstalling'), 0);
-  const jobs: FontJob[] = [];
-  const names: string[] = [];
-  const outcomes: FontResult[] = [];
-  /** Where each job's outcome goes in `outcomes`. */
-  const slots: number[] = [];
-  for (const file of files) {
-    let plan = null;
-    try {
-      if (file.stat.size <= FONT_MAX_BYTES)
-        plan = fontPlan(file.name, new Uint8Array(await app.vault.readBinary(file)));
-    } catch (error) {
-      console.error('Buba: font not read', file.path, error);
-    }
-    names.push(plan?.name ?? file.name);
-    if (!plan) {
-      outcomes.push('not-font');
-      continue;
-    }
-    const from = diskPath(app, file.path);
-    outcomes.push('failed');
-    // Only a full disk path: `diskPath` falls back to the vault path, which PowerShell would read from its own
-    // folder, another file than the one checked (review 28.10).
-    if (!ABSOLUTE_PATH.test(from)) {
-      console.error('Buba: font has no disk path', file.path);
-      continue;
-    }
-    slots.push(outcomes.length - 1);
-    jobs.push({ from, file: file.name, name: plan.registryName });
+/**
+ * The hint in the middle of the window, not a corner notice that is easy to miss. It closes on "Got it",
+ * Escape or a click outside; the grid selection stays, so the fonts can be dragged right away.
+ */
+class FontHintModal extends Modal {
+  readonly #system: FontSystem;
+
+  constructor(app: App, system: FontSystem) {
+    super(app);
+    this.#system = system;
   }
-  const done = jobs.length ? await installFontFiles(jobs) : [];
-  slots.forEach((slot, i) => (outcomes[slot] = done[i] ?? 'failed'));
-  progress.hide();
-  new Notice(fontReport(outcomes, names[0] ?? ''));
+
+  override onOpen(): void {
+    this.setTitle(t('fontHintTitle'));
+    this.contentEl.createEl('p', { text: fontHint(this.#system) });
+    const buttons = this.contentEl.createDiv({ cls: 'modal-button-container' });
+    new ButtonComponent(buttons)
+      .setButtonText(t('fontHintOk'))
+      .setCta()
+      .onClick(() => this.close());
+  }
+
+  override onClose(): void {
+    this.contentEl.empty();
+  }
 }

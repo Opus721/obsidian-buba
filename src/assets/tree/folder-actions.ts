@@ -12,7 +12,7 @@
 // elsewhere leaves its tab where it was (src/assets/grid/view.ts). Several folders picked in the tree go after
 // one batch confirmation with their count (`deleteFolders`). A deletion is an undo step, as for files: Ctrl+Z
 // brings the folders back from Obsidian's trash (src/platform/files/undo.ts).
-import { Notice, type App, type TAbstractFile, type TFile, type TFolder } from 'obsidian';
+import { Notice, TFile, TFolder, type App, type TAbstractFile } from 'obsidian';
 import { renameFolderTarget } from '../../core/actions/new-folder.ts';
 import { deleteGridFolder, GRID_VIEW_TYPE, normalizeGridViewState } from '../../core/layout/view-state.ts';
 import { t } from '../../core/i18n/dict/tree.ts';
@@ -120,8 +120,8 @@ function leaveDeleted(app: App, deleted: string): void {
 
 /** All files inside a folder, at any depth. */
 function filesIn(folder: TAbstractFile): TFile[] {
-  const children = (folder as { children?: TAbstractFile[] }).children;
-  return children
-    ? children.flatMap((child) => ('children' in child ? filesIn(child) : [child as TFile]))
-    : [];
+  if (!(folder instanceof TFolder)) return [];
+  return folder.children.flatMap((child) =>
+    child instanceof TFolder ? filesIn(child) : child instanceof TFile ? [child] : [],
+  );
 }

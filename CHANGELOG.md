@@ -2,6 +2,14 @@
 
 What changed in each release of Buba, in plain words. The newest release is at the top.
 
+## 1.2.1
+
+Font installation no longer reaches into your system.
+
+- "Install font" from 1.2.0 put fonts into the system itself: it wrote to your fonts folder and ran a system program (PowerShell on Windows). Obsidian's plugin review rightly flagged that as "full access to files" and "runs commands". It is gone. Instead, "Go to font installation" opens the system's own font window, Fonts in Windows Settings or Font Book on a Mac, and a hint in the middle of Obsidian says what to do: hold Ctrl (Option on a Mac) and drag the selected fonts into that window. The system installs them, hundreds at once if you like. Dragging is the simplest way that keeps Buba inside your vault.
+- On Linux the font item is gone for now: there is no system font window to drop fonts into.
+- Smaller fixes flagged by the same review, with no visible change: a safer file type check when deleting a folder, and the tree header no longer uses `display: contents`.
+
 ## 1.2.0
 
 Buba works more like a file manager: open in new tabs, copy and paste, undo, pick several folders or tags at once.

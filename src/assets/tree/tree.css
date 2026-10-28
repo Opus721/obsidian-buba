@@ -185,10 +185,16 @@ body.buba-tree-arrows-off .buba-tree .tree-item-self > .collapse-icon {
   padding: var(--size-2-1);
 }
 
-/* Header buttons of other modules ("New tag", view.ts): the box drops out of the layout, so they sit in
-   Obsidian's header row like its own buttons. */
+/* Header buttons of other modules ("New tag", view.ts): a row of its own inside Obsidian's header row with the
+   same gap, so they sit like its own buttons (measured 28.10: the same places as before). Not `display:
+   contents`, which Obsidian's plugin review flags. Without buttons the box takes no gap either. */
 .buba-tree-header-own {
-  display: contents;
+  display: flex;
+  gap: inherit;
+}
+
+.buba-tree-header-own:empty {
+  display: none;
 }
 
 .buba-tree .tree-item-inner,

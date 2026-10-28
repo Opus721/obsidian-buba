@@ -311,8 +311,8 @@ export class TreeView extends ItemView {
         this.#newFolder(open === null ? ROOT : newFolderParent(open, place));
       });
     }
-    // Other modules' buttons ("New tag"), redrawn when the registry changes; the box has `display: contents`
-    // in tree.css, so they lie in Obsidian's header row like its own buttons.
+    // Other modules' buttons ("New tag"), redrawn when the registry changes; the box is a row with the header's
+    // gap (tree.css), so they lie in Obsidian's header row like its own buttons.
     const own = buttons.createDiv({ cls: 'buba-tree-header-own' });
     const drawOwn = (): void => {
       own.empty();

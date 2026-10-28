@@ -24,21 +24,16 @@ const en = {
   dragCount: { one: '{count} file', other: '{count} files' },
   openInDefaultApp: 'Open in default app',
 
-  // Installing fonts (font-install.ts).
-  installFont: 'Install font',
-  installFonts: { one: 'Install {count} font', other: 'Install {count} fonts' },
-  commandInstallFonts: 'Install selected fonts',
-  fontsInstalling: 'Installing fonts…',
-  fontInstalled: 'Font "{name}" installed',
-  fontExists: 'Font "{name}" is already installed',
-  fontFailed: 'Couldn\'t install font "{name}"',
-  notAFont: '"{name}" is not a font file',
-  fontsInstalledCount: { one: '{count} font installed', other: '{count} fonts installed' },
-  fontsExistCount: {
-    one: '{count} font was already installed',
-    other: '{count} fonts were already installed',
-  },
-  fontsFailedCount: { one: "Couldn't install {count} font", other: "Couldn't install {count} fonts" },
+  // Going to font installation (font-install.ts): the system's font window and the hint over the grid.
+  goToFontInstall: 'Go to font installation',
+  commandInstallFonts: 'Go to installation of selected fonts',
+  fontHintTitle: 'Install fonts',
+  fontHintWindows:
+    'Windows opened its Fonts settings. Hold Ctrl and drag the selected fonts from Buba onto "Drag and drop to install": Windows installs them all at once.',
+  fontHintMac:
+    'macOS opened Font Book. Hold Option and drag the selected fonts from Buba into its window: macOS installs them all at once.',
+  fontHintOk: 'Got it',
+  fontWindowFailed: "Couldn't open the system's font window",
 
   // Copy and paste of tiles.
   commandCopyTiles: 'Copy selected files',
@@ -317,37 +312,15 @@ export const strings: Dictionary<ActionsSource> = {
     dragCount: { one: '{count} файл', few: '{count} файла', many: '{count} файлов', other: '{count} файла' },
     openInDefaultApp: 'Открыть в приложении по умолчанию',
 
-    installFont: 'Установить шрифт',
-    installFonts: {
-      one: 'Установить {count} шрифт',
-      few: 'Установить {count} шрифта',
-      many: 'Установить {count} шрифтов',
-      other: 'Установить {count} шрифта',
-    },
-    commandInstallFonts: 'Установить выделенные шрифты',
-    fontsInstalling: 'Установка шрифтов…',
-    fontInstalled: 'Шрифт «{name}» установлен',
-    fontExists: 'Шрифт «{name}» уже установлен',
-    fontFailed: 'Не удалось установить шрифт «{name}»',
-    notAFont: '«{name}» — не файл шрифта',
-    fontsInstalledCount: {
-      one: 'Установлен {count} шрифт',
-      few: 'Установлено {count} шрифта',
-      many: 'Установлено {count} шрифтов',
-      other: 'Установлено {count} шрифта',
-    },
-    fontsExistCount: {
-      one: '{count} шрифт уже был установлен',
-      few: '{count} шрифта уже были установлены',
-      many: '{count} шрифтов уже были установлены',
-      other: '{count} шрифта уже были установлены',
-    },
-    fontsFailedCount: {
-      one: 'Не удалось установить {count} шрифт',
-      few: 'Не удалось установить {count} шрифта',
-      many: 'Не удалось установить {count} шрифтов',
-      other: 'Не удалось установить {count} шрифта',
-    },
+    goToFontInstall: 'Перейти к установке шрифтов',
+    commandInstallFonts: 'Перейти к установке выделенных шрифтов',
+    fontHintTitle: 'Установка шрифтов',
+    fontHintWindows:
+      'Windows открыла окно «Шрифты». Зажмите Ctrl и перетащите выделенные шрифты из Buba в поле «Перетащите для установки» — Windows установит их все сразу.',
+    fontHintMac:
+      'macOS открыла приложение «Шрифты». Зажмите Option и перетащите выделенные шрифты из Buba в его окно — macOS установит их все сразу.',
+    fontHintOk: 'Понятно',
+    fontWindowFailed: 'Не удалось открыть окно шрифтов системы',
 
     commandCopyTiles: 'Копировать выделенные файлы',
     commandPasteTiles: 'Вставить в открытую папку',
